@@ -1,5 +1,6 @@
 import os
 import shutil
+import time
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,7 +8,7 @@ from pydantic import BaseModel
 from typing import List
 
 app = FastAPI()
-IP = "192.168.1.11"
+IP = "192.168.1.48"
 
 if not os.path.exists("images"):
     os.makedirs("images")
@@ -123,7 +124,7 @@ async def mark_as_read(alert_id: str):
 @app.post("/alerts")
 async def add_alert(item: PseudoAlert):
     new_alert = {
-        "id": str(len(alerts_db)+1),  # TODO deleting alerts results in duplicated ids -> different id generation needed
+        "id": str(time.time_ns()),  # TODO deleting alerts results in duplicated ids -> different id generation needed
         "title": item.name,
         "time": item.time,
         "image": f"http://{IP}:8000/images/captured/{item.image}",
@@ -141,11 +142,11 @@ async def get_users():
 
 @app.post("/users")
 async def create_user(name: str = Form(...), file: UploadFile = File(...)):
-    file_path = f"images/{file.filename}"
+    file_path = f"images/users/{name}.jpg"
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    image_url = f"http://{IP}:8000/images/{file.filename}"
+    image_url = f"http://{IP}:8000/images/users/{name}.jpg"
 
     new_user = {
         "id": str(len(users_db)+1),

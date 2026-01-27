@@ -1,0 +1,208 @@
+INFO:     Started server process [2209]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     192.168.1.45:54532 - "GET /alerts HTTP/1.1" 200 OK
+DEBUG: Usunięto 4. Pozostało elementów: 5
+INFO:     192.168.1.45:54532 - "DELETE /alerts/4 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54532 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54532 - "GET /images/lewy.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:54532 - "GET /images/kacper.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:54533 - "GET /images/zupa.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:54532 - "GET /images/maciej.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:54537 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54538 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54545 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54545 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54545 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54556 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54558 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     Started server process [1256]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     192.168.1.45:56433 - "GET /images/maciej.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:56433 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56433 - "GET /images/kacper.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:56433 - "GET /images/lewy.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:56433 - "GET /images/zupa.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:56445 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56447 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1256]
+INFO:     Started server process [1368]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     192.168.1.45:56453 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56453 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56453 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1368]
+INFO:     Started server process [1369]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     192.168.1.45:56457 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56457 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56457 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56457 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56458 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     Started server process [1166]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1166]
+INFO:     Started server process [8033]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:34168 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56665 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56665 - "GET /images/captured/lewy-2026-01-22_22-26.jpg HTTP/1.1" 404 Not Found
+INFO:     192.168.1.45:56665 - "GET /images/captured/lewy-2026-01-22_22-26.jpg HTTP/1.1" 404 Not Found
+DEBUG: Usunięto 1769117191553902822. Pozostało elementów: 6
+INFO:     192.168.1.45:56666 - "DELETE /alerts/1769117191553902822 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56670 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39798 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56671 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56671 - "GET /images/captured/lewy-2026-01-22_22-33.jpg HTTP/1.1" 404 Not Found
+INFO:     192.168.1.45:56672 - "GET /images/captured/lewy-2026-01-22_22-33.jpg HTTP/1.1" 404 Not Found
+INFO:     192.168.1.45:56672 - "GET /images/captured/lewy-2026-01-22_22-33.jpg HTTP/1.1" 404 Not Found
+DEBUG: Usunięto 1769117597752855429. Pozostało elementów: 6
+INFO:     192.168.1.45:56672 - "DELETE /alerts/1769117597752855429 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36484 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59848 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52150 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45036 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56697 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56697 - "GET /images/captured/lewy-2026-01-22_22-55.jpg HTTP/1.1" 404 Not Found
+DEBUG: Usunięto 1769118927660769069. Pozostało elementów: 9
+INFO:     192.168.1.45:56697 - "DELETE /alerts/1769118927660769069 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56697 - "GET /images/captured/lewy-2026-01-22_22-49.jpg HTTP/1.1" 404 Not Found
+DEBUG: Usunięto 1769118577382428178. Pozostało elementów: 8
+INFO:     192.168.1.45:56697 - "DELETE /alerts/1769118577382428178 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56697 - "GET /images/captured/lewy-2026-01-22_22-45.jpg HTTP/1.1" 404 Not Found
+DEBUG: Usunięto 1769118325593033255. Pozostało elementów: 7
+INFO:     192.168.1.45:56697 - "DELETE /alerts/1769118325593033255 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56697 - "GET /images/captured/lewy-2026-01-22_22-43.jpg HTTP/1.1" 404 Not Found
+DEBUG: Usunięto 1769118218878954614. Pozostało elementów: 6
+INFO:     192.168.1.45:56697 - "DELETE /alerts/1769118218878954614 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56697 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45870 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56700 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56700 - "GET /images/captured/lewy-2026-01-22_23-00.jpg HTTP/1.1" 200 OK
+DEBUG: Usunięto 1769119226857489994. Pozostało elementów: 6
+INFO:     192.168.1.45:56701 - "DELETE /alerts/1769119226857489994 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59256 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56704 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56704 - "GET /images/captured/unknown-2026-01-22_23-08.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51928 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56715 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56715 - "GET /images/captured/maciej-2026-01-22_23-11.jpg HTTP/1.1" 200 OK
+DEBUG: Usunięto 1769119863381313300. Pozostało elementów: 7
+INFO:     192.168.1.45:56718 - "DELETE /alerts/1769119863381313300 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56718 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56718 - "GET /images/captured/unknown-2026-01-22_23-08.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:56718 - "GET /alerts HTTP/1.1" 200 OK
+DEBUG: Usunięto 6. Pozostało elementów: 6
+INFO:     192.168.1.45:56718 - "DELETE /alerts/6 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56718 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59710 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56729 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56729 - "GET /images/captured/no_face_detected-2026-01-22_23-16.jpg HTTP/1.1" 200 OK
+INFO:     Started server process [1187]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     192.168.1.45:56935 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56935 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56936 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60084 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56937 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56937 - "GET /images/captured/lewy-2026-01-22_23-34.jpg HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56941 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56941 - "GET /images/captured/lewy-2026-01-22_23-34.jpg HTTP/1.1" 304 Not Modified
+DEBUG: Usunięto 1769121265855905396. Pozostało elementów: 6
+INFO:     192.168.1.45:56941 - "DELETE /alerts/1769121265855905396 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56941 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     Started server process [1187]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     192.168.1.45:56967 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:56967 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57111 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57111 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46100 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57121 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57121 - "GET /images/captured/no_face_detected-2026-01-23_00-00.jpg HTTP/1.1" 200 OK
+DEBUG: Usunięto 1769122833158999207. Pozostało elementów: 6
+INFO:     192.168.1.45:57126 - "DELETE /alerts/1769122833158999207 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40672 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57127 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57127 - "GET /images/captured/no_face_detected-2026-01-23_00-01.jpg HTTP/1.1" 200 OK
+DEBUG: Usunięto 1769122903134606774. Pozostało elementów: 6
+INFO:     192.168.1.45:57127 - "DELETE /alerts/1769122903134606774 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57129 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57129 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57632 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57130 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57130 - "GET /images/captured/no_face_detected-2026-01-23_00-02.jpg HTTP/1.1" 200 OK
+DEBUG: Usunięto 1769122964504703472. Pozostało elementów: 6
+INFO:     192.168.1.45:57131 - "DELETE /alerts/1769122964504703472 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58112 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57132 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57132 - "GET /images/captured/maciej-2026-01-23_00-03.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39604 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57137 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:57137 - "GET /images/captured/unknown-2026-01-23_00-04.jpg HTTP/1.1" 200 OK
+DEBUG: Usunięto 4. Pozostało elementów: 7
+INFO:     192.168.1.45:57138 - "DELETE /alerts/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60736 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51965 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51965 - "GET /images/captured/maciej-2026-01-23_00-06.jpg HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51967 - "GET /images/captured/unknown-2026-01-23_00-04.jpg HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:44032 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51972 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51972 - "GET /images/captured/maciej-2026-01-23_00-09.jpg HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51974 - "GET /images/captured/maciej-2026-01-23_00-06.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:51974 - "GET /images/captured/maciej-2026-01-23_00-09.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:51974 - "GET /images/captured/maciej-2026-01-23_00-09.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:51977 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51977 - "GET /images/captured/maciej-2026-01-23_00-09.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:51977 - "GET /images/captured/maciej-2026-01-23_00-06.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:51977 - "GET /images/captured/unknown-2026-01-23_00-04.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:51977 - "GET /images/captured/maciej-2026-01-23_00-03.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:51977 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51977 - "GET /images/captured/maciej-2026-01-23_00-09.jpg HTTP/1.1" 304 Not Modified
+INFO:     192.168.1.45:51978 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51979 - "POST /users HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51979 - "GET /users HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51979 - "GET /images/062A0FEB-F861-4DCB-A72F-F31044DAA601.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55098 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51983 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51983 - "GET /images/captured/unknown-2026-01-23_00-13.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51212 - "POST /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51984 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:51984 - "GET /images/captured/unknown-2026-01-23_00-14.jpg HTTP/1.1" 200 OK
+DEBUG: Usunięto 1769123660512711179. Pozostało elementów: 10
+INFO:     192.168.1.45:54402 - "DELETE /alerts/1769123660512711179 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54402 - "GET /images/captured/unknown-2026-01-23_00-13.jpg HTTP/1.1" 304 Not Modified
+DEBUG: Usunięto 1769123619870157802. Pozostało elementów: 9
+INFO:     192.168.1.45:54402 - "DELETE /alerts/1769123619870157802 HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54404 - "GET /alerts HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54404 - "GET /images/062A0FEB-F861-4DCB-A72F-F31044DAA601.jpg HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54404 - "GET /users HTTP/1.1" 200 OK
+INFO:     192.168.1.45:54405 - "GET /users HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1187]

@@ -1,6 +1,7 @@
 import face_recognition
 from fastapi import FastAPI
 import os
+import shutil
 import numpy as np
 import cv2
 import requests
@@ -70,14 +71,22 @@ result = identify_face("test_photo.jpg", known_encodes, known_names)
 
 print(result)
 
-date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-image_name = f"{result}-{date}.jpg"
+date = datetime.now()
+date_label = date.strftime("%Y-%m-%d_%H-%M")
+time_label = date.strftime("%H:%M")
+image_name = f"{result}-{date_label}.jpg"
 
 alert_data = {
     "name": result,
-    "time": date,
+    "time": time_label,
     "image": image_name
 }
+
+capture_path = os.path.join("images/captured/", image_name)
+try:
+    shutil.copy2("/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg", capture_path)
+except FileNotFoundError:
+    print(f"ERROR: File not found")
 
 res = requests.post(API_URL, json=alert_data)
 
