@@ -66,7 +66,7 @@ async def create_user(name: str = Form(...), file: UploadFile = File(...), sessi
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    new_user.image = f"http://{IP}:8000/images/users/{filename}"
+    new_user.image = filename
     session.add(new_user)
     session.commit()
 
