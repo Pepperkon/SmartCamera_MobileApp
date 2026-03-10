@@ -1,4 +1,5 @@
-from sqlmodel import *
+from sqlmodel import SQLModel, Field, select, Session, create_engine
+from typing import Optional
 
 DATABASE_URL = "sqlite:///data/database.db"
 engine = create_engine(DATABASE_URL, echo=True, connect_args={"check_same_thread": False})
@@ -18,8 +19,3 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     image: str
-
-# class PseudoAlert(SQLModel, table=True):
-#     name: str
-#     time: str
-#     image: str

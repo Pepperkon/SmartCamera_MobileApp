@@ -1,6 +1,7 @@
 import os
 import shutil
 import time
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -8,8 +9,13 @@ from pydantic import BaseModel
 from typing import List
 from database import *
 
+load_dotenv()
+IP = os.environ.get("IP")
+
+if not IP:
+    raise RuntimeError("IP not found, check README for instructions")
+
 app = FastAPI()
-IP = "192.168.1.48"
 
 app.mount("/images", StaticFiles(directory="data/images"), name="images")
 
@@ -77,89 +83,4 @@ async def delete_alert(alert_id: int, session: Session = Depends(get_session)):
     session.delete(alert_to_remove)
     session.commit()
 
-    # print(f"DEBUG: Usunięto {alert_id}. Pozostało elementów: {len(alerts_db)}")
-
     return {"message": f"Alert {alert_id} was removed", "deleted_id": alert_id}
-
-
-# alerts_db = [
-#     {
-#         "id": "1",
-#         "title": "Kacper",
-#         "time": "12:45",
-#         "image": f"http://{IP}:8000/images/kacper.jpg",
-#         "isNew": True
-#     },
-#     {
-#         "id": "2",
-#         "title": "Maciej",
-#         "time": "13:10",
-#         "image": f"http://{IP}:8000/images/maciej.jpg",
-#         "isNew": True
-#     },
-#     {
-#         "id": "3",
-#         "title": "Maciejunio",
-#         "time": "6:10",
-#         "image": f"http://{IP}:8000/images/maciej.jpg",
-#         "isNew": True
-#     },
-#     {
-#         "id": "4",
-#         "title": "Zupstein",
-#         "time": "11:11",
-#         "image": f"http://{IP}:8000/images/zupa.jpg",
-#         "isNew": True
-#     },
-#     {
-#         "id": "5",
-#         "title": "Robercik",
-#         "time": "09:09",
-#         "image": f"http://{IP}:8000/images/lewy.jpg",
-#         "isNew": True
-#     },
-#     {
-#         "id": "6",
-#         "title": "Repcak",
-#         "time": "11:11",
-#         "image": f"http://{IP}:8000/images/kacper.jpg",
-#         "isNew": True
-#     },
-# ]
-
-# users_db = [
-#     {
-#         "id": "1",
-#         "name": "Maciej",
-#         "image": f"http://{IP}:8000/images/maciej.jpg"
-#     },
-#     {
-#         "id": "2",
-#         "name": "Kacper",
-#         "image": f"http://{IP}:8000/images/kacper.jpg"
-#     },
-#     {
-#         "id": "3",
-#         "name": "Lewy",
-#         "image": f"http://{IP}:8000/images/lewy.jpg"
-#     },
-#     {
-#         "id": "4",
-#         "name": "Zupa",
-#         "image": f"http://{IP}:8000/images/zupa.jpg"
-#     },
-# ]
-#
-# # @app.post("/alerts")
-# async def add_alert(item: PseudoAlert):
-#     new_alert = {
-#         "id": str(time.time_ns()),  # TODO deleting alerts results in duplicated ids -> different id generation needed
-#         "title": item.name,
-#         "time": item.time,
-#         "image": f"http://{IP}:8000/images/captured/{item.image}",
-#         "isNew": True
-#     }
-
-#     alerts_db.append(new_alert)
-
-#     return new_alert
