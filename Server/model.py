@@ -9,7 +9,7 @@ from datetime import datetime
 
 API_URL = "http://localhost:8000/alerts"
 
-DIRECTORY = "images/users" 
+DIRECTORY = "data/images/users"
 TOLERANCE = 0.50
 FILEPATH = "test_photo.jpg"
 
@@ -36,12 +36,12 @@ async def recognize_face():
 def get_known_encodings(directory):
     known_encodes = []
     known_names = []
-    
+
     for name in os.listdir(directory):
         img_path = os.path.join(directory, name)
         image = face_recognition.load_image_file(img_path)
         encodings = face_recognition.face_encodings(image)
-        
+
         if len(encodings) > 0:
             known_encodes.append(encodings[0])
             known_names.append(os.path.splitext(name)[0])
@@ -49,20 +49,20 @@ def get_known_encodings(directory):
 
 def identify_face(input_image_path, known_encodes, known_names):
     unknown_image = face_recognition.load_image_file(input_image_path)
-    
+
     unknown_encodings = face_recognition.face_encodings(unknown_image)
-    
+
     if len(unknown_encodings) == 0:
         return "no_face_detected"
 
     face_to_check = unknown_encodings[0]
     distances = face_recognition.face_distance(known_encodes, face_to_check)
-    
+
     if len(distances) > 0:
         best_match_index = np.argmin(distances)
         if distances[best_match_index] < TOLERANCE:
             return known_names[best_match_index]
-    
+
     return "unknown"
 
 known_encodes, known_names = get_known_encodings(DIRECTORY)
@@ -92,5 +92,5 @@ res = requests.post(API_URL, json=alert_data)
 
 print(res)
 
-# Camera script needs to wait for movement, take photo and save it, call face recognition from this file by API 
-# This file recognizes it and posts the result to main.py 
+# Camera script needs to wait for movement, take photo and save it, call face recognition from this file by API
+# This file recognizes it and posts the result to main.py

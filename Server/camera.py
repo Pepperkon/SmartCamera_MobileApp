@@ -25,7 +25,7 @@ def take_photo():
         print(f"✅ Zdjęcie zapisane jako: {PHOTO_PATH}")
     else:
         print("❌ Błąd: Nie udało się przechwycić obrazu.")
-    
+
     cam.release()
     return ret
 
