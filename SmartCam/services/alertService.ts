@@ -1,7 +1,6 @@
 import { AlertItem } from "@/constants/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const API_URL = "http://192.168.1.48:8000";
+import { API_URL } from "@/constants/api";
 
 const MOCK_ALERTS: AlertItem[] = [
   {

@@ -1,3 +1,4 @@
+import { API_URL } from "@/constants/api";
 import { COLORS } from "@/constants/theme";
 import { User } from "@/constants/types";
 import { GlobalStyles } from "@/styles/GlobalStyles";
@@ -9,8 +10,11 @@ interface Props {
 }
 
 function UserEntry({ user }: Props) {
-  const imageSource =
-    typeof user.image === "string" ? { uri: user.image } : user.image;
+  const filepath = `${API_URL}/images/users/${user.image}`;
+
+  const imageSource = user.image
+    ? { uri: filepath }
+    : { uri: "https://ui-avatars.com/api/?name=" + user.name };
 
   return (
     <Pressable

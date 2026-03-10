@@ -1,7 +1,6 @@
 import { User } from "@/constants/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const API_URL = "http://192.168.1.48:8000";
+import { API_URL } from "@/constants/api";
 
 const STORAGE_KEY = "@users_cache";
 
@@ -27,6 +26,7 @@ export const saveUsersToCache = async (users: User[]) => {
 
 export const getUsersFromCache = async (): Promise<User[] | null> => {
   try {
+    console.log("caching");
     const jsonValue = await AsyncStorage.getItem(STORAGE_KEY);
     return jsonValue != null ? JSON.parse(jsonValue) : null;
   } catch (e) {
