@@ -5,14 +5,23 @@ import {
   getUsersFromCache,
   saveUsersToCache,
 } from "@/services/userService";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet } from "react-native";
 import UserEntry from "./userEntry";
+import { useFocusEffect } from "@react-navigation/native";
 
 function UserList() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
+
+  const syncWithCache = async () => {
+    const cachedData = await getUsersFromCache();
+    if (cachedData) {
+      setUsers(cachedData);
+    }
+    setLoading(false);
+  };
 
   const loadData = async (forceRefresh = false) => {
     if (forceRefresh) setRefreshing(true);
@@ -29,26 +38,12 @@ function UserList() {
     loadData(true);
   };
 
-  useEffect(() => {
-    const loadInitialData = async () => {
-      setLoading(true);
-
-      const cachedData = await getUsersFromCache();
-
-      if (cachedData && cachedData.length > 0) {
-        setUsers(cachedData);
-        setLoading(false);
-        return;
-      }
-
-      const freshData = await fetchUsers();
-      setUsers(freshData);
-      saveUsersToCache(freshData);
-      setLoading(false);
-    };
-
-    loadInitialData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      syncWithCache();
+      loadData();
+    }, []),
+  );
 
   if (loading) {
     return <ActivityIndicator style={{ flex: 1 }} size="large" />;

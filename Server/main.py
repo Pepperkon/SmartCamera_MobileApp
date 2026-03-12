@@ -81,7 +81,7 @@ async def create_user(name: str = Form(...), file: UploadFile = File(...), sessi
     session.commit()
     session.refresh(new_user)
 
-    filename = f"{new_user.id}.jpg"
+    filename = f"{new_user.id}_{int(time.time())}.jpg"      # timestamp fixes problems with id reuse
     file_path = f"data/images/users/{filename}"
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -98,9 +98,22 @@ async def delete_alert(alert_id: int, session: Session = Depends(get_session)):
     alert_to_remove = session.get(Alert, alert_id)
 
     if not alert_to_remove:
-        raise HTTPException(status_code=404, detail="Alert nie znaleziony")
+        raise HTTPException(status_code=404, detail="Alert not found")
 
     session.delete(alert_to_remove)
     session.commit()
 
     return {"message": f"Alert {alert_id} was removed", "deleted_id": alert_id}
+
+@app.delete("/users/{user_id}")
+async def delete_user(user_id: int, session: Session = Depends(get_session)):
+
+    user_to_remove = session.get(User, user_id)
+
+    if not user_to_remove:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    session.delete(user_to_remove)
+    session.commit()
+
+    return {"message": f"User {user_id} was removed", "deleted_id": user_id}

@@ -2,6 +2,7 @@ import { API_URL } from "@/constants/api";
 import { COLORS } from "@/constants/theme";
 import { User } from "@/constants/types";
 import { GlobalStyles } from "@/styles/GlobalStyles";
+import { useRouter } from "expo-router";
 import React from "react";
 import { Image, Pressable, StyleSheet, Text } from "react-native";
 
@@ -10,6 +11,8 @@ interface Props {
 }
 
 function UserEntry({ user }: Props) {
+  const router = useRouter();
+
   const filepath = `${API_URL}/images/users/${user.image}`;
 
   const imageSource = user.image
@@ -22,6 +25,9 @@ function UserEntry({ user }: Props) {
         GlobalStyles.singleEntry,
         pressed && GlobalStyles.pressed,
       ]}
+      onPress={() => {
+        router.push({ pathname: "/user-details", params: { id: user.id } });
+      }}
     >
       <Image source={imageSource} style={styles.image}></Image>
       <Text style={GlobalStyles.text_primary}>{user.name}</Text>

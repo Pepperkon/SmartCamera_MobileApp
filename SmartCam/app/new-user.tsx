@@ -2,6 +2,7 @@ import { COLORS, SPACING } from "@/constants/theme";
 import { addUser } from "@/services/userService";
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
@@ -15,6 +16,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 function NewUser() {
+  const router = useRouter();
+
   const [name, setName] = useState("");
   const [image, setImage] = useState<string | null>(null);
 
@@ -41,6 +44,7 @@ function NewUser() {
       Alert.alert("Sukces", "Użytkownik dodany!");
       setName("");
       setImage(null);
+      router.back();
     } catch (e) {
       Alert.alert("Błąd", "Nie udało się połączyć z serwerem.");
     }

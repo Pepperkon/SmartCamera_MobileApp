@@ -26,7 +26,6 @@ export const saveUsersToCache = async (users: User[]) => {
 
 export const getUsersFromCache = async (): Promise<User[] | null> => {
   try {
-    console.log("caching");
     const jsonValue = await AsyncStorage.getItem(STORAGE_KEY);
     return jsonValue != null ? JSON.parse(jsonValue) : null;
   } catch (e) {
@@ -59,4 +58,36 @@ export const addUser = async (name: string, imageUri: string) => {
   });
 
   return await response.json();
+};
+
+export const deleteUser = async (id: string) => {
+  try {
+    const response = await fetch(`${API_URL}/users/${id}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || "Error");
+    }
+
+    return await response.json();
+  } catch (e) {
+    throw e;
+  }
+};
+
+export const deleteUserFromCache = async (id: string) => {
+  try {
+    const currentUsers = await getUsersFromCache();
+    if (currentUsers) {
+      const updatedUsers = currentUsers.filter(
+        (user) => String(user.id) !== String(id),
+      );
+      await saveUsersToCache(updatedUsers);
+      return updatedUsers;
+    }
+  } catch (e) {
+    throw e;
+  }
 };
