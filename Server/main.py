@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List
 from database import *
+from sqlalchemy.orm import selectinload 
 
 load_dotenv()
 IP = os.environ.get("IP")
@@ -69,28 +70,41 @@ async def mark_as_read(alert_id: int, session: Session = Depends(get_session)):
     return {"status": "success", "message": f"Alert {alert_id} przeczytany"}
 
 
-@app.get("/users", response_model=List[User])
+@app.get("/users", response_model=List[UserRead])
 async def get_users(session: Session = Depends(get_session)):
     """Zwraca listę wszystkich użytkowników."""
-    return session.exec(select(User)).all()
+    statement = select(User).options(selectinload(User.images))
+    results = session.exec(statement).all()
+    return results
 
 @app.post("/users")
 async def create_user(name: str = Form(...), file: UploadFile = File(...), session: Session = Depends(get_session)):
-    new_user = User(name=name, image="")
+    new_user = User(name=name)
     session.add(new_user)
     session.commit()
     session.refresh(new_user)
 
+    user_dir = f"data/images/users/{new_user.id}"
+    os.makedirs(user_dir, exist_ok=True)
+
     filename = f"{new_user.id}_{int(time.time())}.jpg"      # timestamp fixes problems with id reuse
-    file_path = f"data/images/users/{filename}"
+    file_path = f"data/images/users/{new_user.id}/{filename}"
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    new_user.image = filename
-    session.add(new_user)
+    new_face_template = FaceTemplate(
+        filepath=filename,
+        user_id=new_user.id,
+    )
+
+    session.add(new_face_template)
     session.commit()
 
-    return new_user
+    statement = select(User).where(User.id == new_user.id).options(selectinload(User.images))
+    full_user = session.exec(statement).first()
+    
+    return full_user
 
 @app.delete("/alerts/{alert_id}")
 async def delete_alert(alert_id: int, session: Session = Depends(get_session)):
@@ -107,13 +121,63 @@ async def delete_alert(alert_id: int, session: Session = Depends(get_session)):
 
 @app.delete("/users/{user_id}")
 async def delete_user(user_id: int, session: Session = Depends(get_session)):
-
-    user_to_remove = session.get(User, user_id)
+    statement = select(User).where(User.id == user_id).options(selectinload(User.images))
+    user_to_remove = session.exec(statement).first()
 
     if not user_to_remove:
         raise HTTPException(status_code=404, detail="User not found")
 
+    for img in user_to_remove.images:
+        session.delete(img)
+    
+    folder_path = f"data/images/users/{user_id}"
+    if os.path.exists(folder_path):
+        try:
+            shutil.rmtree(folder_path)
+        except Exception as e:
+            print(f"Błąd przy usuwaniu plików: {e}")
+
     session.delete(user_to_remove)
     session.commit()
 
-    return {"message": f"User {user_id} was removed", "deleted_id": user_id}
+    return {"message": f"User {user_id} and all their data removed", "deleted_id": user_id}
+
+@app.post("/users/{user_id}/images", response_model=UserRead)
+async def add_user_image(
+    user_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session)
+):
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    filename = f"{user_id}_{int(time.time())}.jpg"
+    filepath = f"data/images/users/{user_id}/{filename}"
+
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    new_face_template = FaceTemplate(
+        filepath=filename,
+        user_id=user_id,
+    )
+
+    session.add(new_face_template)
+    session.commit()
+
+    statement = select(User).where(User.id == user_id).options(selectinload(User.images))
+    updated_user = session.exec(statement).first()
+    
+    return updated_user
+
+@app.get("/users/{user_id}", response_model=UserRead)
+async def get_user(user_id: int, session: Session = Depends(get_session)):
+    """Pobiera dane konkretnego użytkownika wraz z jego zdjęciami."""
+    statement = select(User).where(User.id == user_id).options(selectinload(User.images))
+    user = session.exec(statement).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Użytkownik nie istnieje")
+        
+    return user

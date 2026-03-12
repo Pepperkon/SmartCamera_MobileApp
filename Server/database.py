@@ -1,5 +1,5 @@
-from sqlmodel import SQLModel, Field, select, Session, create_engine
-from typing import Optional
+from sqlmodel import SQLModel, Field, select, Session, create_engine, Relationship
+from typing import Optional, List
 
 DATABASE_URL = "sqlite:///data/database.db"
 engine = create_engine(DATABASE_URL, echo=True, connect_args={"check_same_thread": False})
@@ -15,7 +15,24 @@ class Alert(SQLModel, table=True):
     image: str
     isNew: bool
 
+class FaceTemplateRead(SQLModel):
+    id: int
+    filepath: str
+    user_id: int
+
+class UserRead(SQLModel):
+    id: int
+    name: str
+    images: List[FaceTemplateRead] = []
+
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    image: str
+    images: List["FaceTemplate"] = Relationship(back_populates="user")
+
+class FaceTemplate(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    filepath: str
+    # embedding: str TODO
+    user: User = Relationship(back_populates="images")

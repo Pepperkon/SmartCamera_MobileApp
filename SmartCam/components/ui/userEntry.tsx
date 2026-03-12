@@ -13,9 +13,9 @@ interface Props {
 function UserEntry({ user }: Props) {
   const router = useRouter();
 
-  const filepath = `${API_URL}/images/users/${user.image}`;
+  const filepath = `${API_URL}/images/users/${user.id}/${user.images[0].filepath}`;
 
-  const imageSource = user.image
+  const imageSource = user.images[0]
     ? { uri: filepath }
     : { uri: "https://ui-avatars.com/api/?name=" + user.name };
 

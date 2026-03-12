@@ -9,8 +9,14 @@ export interface AlertItem {
   isNew: boolean;
 }
 
+export interface UserImage {
+  id: number;
+  filepath: string;
+  user_id: number;
+}
+
 export interface User {
   id: string;
   name: string;
-  image: ImageSourcePropType;
+  images: UserImage[];
 }

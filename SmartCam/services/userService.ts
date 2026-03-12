@@ -60,6 +60,27 @@ export const addUser = async (name: string, imageUri: string) => {
   return await response.json();
 };
 
+export const addUserImage = async (id: string, imageUri: string) => {
+  const formData = new FormData();
+
+  const filename = imageUri.split("/").pop() || "photo.jpg";
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : `image`;
+
+  formData.append("file", {
+    uri: imageUri,
+    name: filename,
+    type: type,
+  } as any);
+
+  const response = await fetch(`${API_URL}/users/${id}/images`, {
+    method: "POST",
+    body: formData,
+  });
+
+  return await response.json();
+};
+
 export const deleteUser = async (id: string) => {
   try {
     const response = await fetch(`${API_URL}/users/${id}`, {
