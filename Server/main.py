@@ -15,6 +15,11 @@ IP = os.environ.get("IP")
 if not IP:
     raise RuntimeError("IP not found, check README for instructions")
 
+class PseudoAlert(BaseModel):   # LEAVE AS IS, crucial system element
+    name: str
+    time: str
+    image: str
+
 app = FastAPI()
 
 app.mount("/images", StaticFiles(directory="data/images"), name="images")
@@ -25,6 +30,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.post("/alerts")
+async def add_alert(item: PseudoAlert, session: Session = Depends(get_session)):
+    new_alert = Alert(
+        title=item.name,
+        time=item.time,
+        image=item.image,   # TODO - might need some changes 
+        isNew=True
+    )
+
+    session.add(new_alert)
+    session.commit()
+    session.refresh(new_alert)  
+
+    return new_alert
 
 @app.on_event("startup")
 def on_startup():

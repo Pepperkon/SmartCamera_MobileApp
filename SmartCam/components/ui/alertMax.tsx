@@ -4,13 +4,14 @@ import {
   deleteAlert,
   deleteAlertFromCache,
   getAlertsFromCache,
-} from "@/services/alertService"; // Importujemy Twój cache
+} from "@/services/alertService";
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import CircleButton from "./circleButton";
 import NotificationMark from "./notificationMark";
+import { API_URL } from "@/constants/api";
 
 function AlertMax() {
   const router = useRouter();
@@ -31,7 +32,7 @@ function AlertMax() {
     const loadAlert = async () => {
       const cachedAlerts = await getAlertsFromCache();
       if (cachedAlerts) {
-        const found = cachedAlerts.find((a) => a.id === id);
+        const found = cachedAlerts.find((a) => String(a.id) === String(id));
         setAlert(found || null);
       }
       setLoading(false);
@@ -58,9 +59,12 @@ function AlertMax() {
     );
   }
 
-  // Obsługa źródła obrazu: URL z serwera lub lokalny require z mocka
+  const filepath = `${API_URL}/images/captured/${alert.image}`;
+
   const imageSource =
-    typeof alert.image === "string" ? { uri: alert.image } : alert.image;
+    typeof alert.image === "string"
+      ? { uri: filepath }
+      : { uri: "https://ui-avatars.com/api/?name=" + alert.title };
 
   return (
     <View style={styles.container}>
