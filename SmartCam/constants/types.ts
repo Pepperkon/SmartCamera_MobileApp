@@ -7,6 +7,7 @@ export interface AlertItem {
   image: ImageSourcePropType; // Obsłuży zarówno require(...), jak i { uri: '...' }
   time: string;
   isNew: boolean;
+  captured_user_id?: number;
 }
 
 export interface UserImage {
@@ -19,4 +20,5 @@ export interface User {
   id: string;
   name: string;
   images: UserImage[];
+  alerts: AlertItem[];
 }
