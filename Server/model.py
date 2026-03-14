@@ -33,18 +33,32 @@ async def recognize_face():
     requests.post(API_URL, json=alert_data)
 
 
-def get_known_encodings(directory):
+def get_known_encodings(base_dir):
     known_encodes = []
     known_names = []
 
-    for name in os.listdir(directory):
-        img_path = os.path.join(directory, name)
-        image = face_recognition.load_image_file(img_path)
-        encodings = face_recognition.face_encodings(image)
+    if not os.path.exists(base_dir):
+        print(f"Folder {base_dir} nie istnieje!")
+        return known_encodes, known_names
 
-        if len(encodings) > 0:
-            known_encodes.append(encodings[0])
-            known_names.append(os.path.splitext(name)[0])
+    # Przechodzimy przez foldery użytkowników (1, 2, 3...)
+    for user_id in os.listdir(base_dir):
+        user_folder = os.path.join(base_dir, user_id)
+        
+        if os.path.isdir(user_folder):
+            # Przechodzimy przez zdjęcia wewnątrz folderu użytkownika
+            for filename in os.listdir(user_folder):
+                if filename.endswith((".jpg", ".png", ".jpeg")):
+                    img_path = os.path.join(user_folder, filename)
+                    image = face_recognition.load_image_file(img_path)
+                    encodings = face_recognition.face_encodings(image)
+
+                    if len(encodings) > 0:
+                        known_encodes.append(encodings[0])
+                        # Jako nazwę bierzemy ID folderu (user_id)
+                        known_names.append(user_id)
+                        print(f"Załadowano wzorzec dla User ID: {user_id} ({filename})")
+    
     return known_encodes, known_names
 
 def identify_face(input_image_path, known_encodes, known_names):
@@ -82,7 +96,7 @@ alert_data = {
     "image": image_name
 }
 
-capture_path = os.path.join("images/captured/", image_name)
+capture_path = os.path.join("data/images/captured/", image_name)
 try:
     shutil.copy2("/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg", capture_path)
 except FileNotFoundError:
