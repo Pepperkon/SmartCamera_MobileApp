@@ -25,8 +25,20 @@ async def recognize_face():
     date = datetime.now().strftime("%Y-%m-%d_%H-%M")
     image_name = f"{result}-{date}.jpg"
 
+    save_path = os.path.join("data/images/captured", image_name)
+
+    # 3. FIZYCZNIE SKOPIUJ PLIK (Tego brakowało!)
+    try:
+        # Upewnij się, że folder istnieje
+        os.makedirs("data/images/captured", exist_ok=True)
+        # Kopiuj test_photo.jpg do nowej lokalizacji z nową nazwą
+        shutil.copy2(FILEPATH, save_path)
+        print(f"✅ Zdjęcie zapisane w: {save_path}")
+    except Exception as e:
+        print(f"❌ Błąd zapisu zdjęcia: {e}")
+
     alert_data = {
-        "title": result,
+        "name": result,
         "time": date,
         "image": image_name
     }

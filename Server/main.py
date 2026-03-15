@@ -23,7 +23,7 @@ class PseudoAlert(BaseModel):   # LEAVE AS IS, crucial system element
 
 app = FastAPI()
 
-app.mount("data/images", StaticFiles(directory="data/images"), name="images")
+app.mount("/data/images", StaticFiles(directory="data/images"), name="images")
 
 app.add_middleware(
     CORSMiddleware,
