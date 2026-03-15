@@ -1,6 +1,7 @@
 import subprocess
 import os
 import time
+import requests
 
 def take_photo_system():
     PHOTO_PATH = "/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg"
@@ -30,7 +31,5 @@ def take_photo_system():
 
     return False
 
-# Użycie:
 if take_photo_system():
-    # Tutaj uruchom swój model.py
-    subprocess.run(["python", "model.py"])
+    requests.post("http://localhost:8001/recognize")

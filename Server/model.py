@@ -5,6 +5,7 @@ import shutil
 import numpy as np
 import cv2
 import requests
+import uvicorn
 from datetime import datetime
 
 API_URL = "http://localhost:8000/alerts"
@@ -79,32 +80,9 @@ def identify_face(input_image_path, known_encodes, known_names):
 
     return "unknown"
 
-known_encodes, known_names = get_known_encodings(DIRECTORY)
-
-result = identify_face("test_photo.jpg", known_encodes, known_names)
-
-print(result)
-
-date = datetime.now()
-date_label = date.strftime("%Y-%m-%d_%H-%M")
-time_label = date.strftime("%H:%M")
-image_name = f"{result}-{date_label}.jpg"
-
-alert_data = {
-    "name": result,
-    "time": time_label,
-    "image": image_name
-}
-
-capture_path = os.path.join("data/images/captured/", image_name)
-try:
-    shutil.copy2("/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg", capture_path)
-except FileNotFoundError:
-    print(f"ERROR: File not found")
-
-res = requests.post(API_URL, json=alert_data)
-
-print(res)
+if __name__ == "__main__":
+    known_encodes, known_names = get_known_encodings(DIRECTORY)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
 
 # Camera script needs to wait for movement, take photo and save it, call face recognition from this file by API
 # This file recognizes it and posts the result to main.py
