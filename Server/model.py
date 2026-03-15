@@ -1,100 +1,81 @@
 import face_recognition
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 import os
 import shutil
 import numpy as np
-import cv2
 import requests
 import uvicorn
 from datetime import datetime
+from sqlmodel import Session, select
+from database import engine, get_session, FaceTemplate # Importy z Twojej bazy
+import sys
 
 API_URL = "http://localhost:8000/alerts"
-
-DIRECTORY = "data/images/users"
 TOLERANCE = 0.50
-FILEPATH = "test_photo.jpg"
+FILEPATH = "/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg"
+CAPTURE_DIR = "data/images/captured"
+UNKNOWN = -1
 
 app = FastAPI()
 
-@app.post("/recognize")
-async def recognize_face():
-    result = identify_face("test_photo.jpg", known_encodes, known_names)
+def identify(known_encodes, target_filepath=FILEPATH):
+    if not os.path.exists(target_filepath):
+        print(f"Błąd: Brak pliku {target_filepath}")
+        return None
 
-    print(result)
+    image = face_recognition.load_image_file(target_filepath)
+    unknown_encoding = face_recognition.face_encodings(image)
 
-    date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    image_name = f"{result}-{date}.jpg"
+    if len(unknown_encoding) == 0:
+        return None
 
-    save_path = os.path.join("data/images/captured", image_name)
-
-    # 3. FIZYCZNIE SKOPIUJ PLIK (Tego brakowało!)
-    try:
-        # Upewnij się, że folder istnieje
-        os.makedirs("data/images/captured", exist_ok=True)
-        # Kopiuj test_photo.jpg do nowej lokalizacji z nową nazwą
-        shutil.copy2(FILEPATH, save_path)
-        print(f"✅ Zdjęcie zapisane w: {save_path}")
-    except Exception as e:
-        print(f"❌ Błąd zapisu zdjęcia: {e}")
-
-    alert_data = {
-        "name": result,
-        "time": date,
-        "image": image_name
-    }
-
-    requests.post(API_URL, json=alert_data)
-
-
-def get_known_encodings(base_dir):
-    known_encodes = []
-    known_names = []
-
-    if not os.path.exists(base_dir):
-        print(f"Folder {base_dir} nie istnieje!")
-        return known_encodes, known_names
-
-    # Przechodzimy przez foldery użytkowników (1, 2, 3...)
-    for user_id in os.listdir(base_dir):
-        user_folder = os.path.join(base_dir, user_id)
-        
-        if os.path.isdir(user_folder):
-            # Przechodzimy przez zdjęcia wewnątrz folderu użytkownika
-            for filename in os.listdir(user_folder):
-                if filename.endswith((".jpg", ".png", ".jpeg")):
-                    img_path = os.path.join(user_folder, filename)
-                    image = face_recognition.load_image_file(img_path)
-                    encodings = face_recognition.face_encodings(image)
-
-                    if len(encodings) > 0:
-                        known_encodes.append(encodings[0])
-                        # Jako nazwę bierzemy ID folderu (user_id)
-                        known_names.append(user_id)
-                        print(f"Załadowano wzorzec dla User ID: {user_id} ({filename})")
-    
-    return known_encodes, known_names
-
-def identify_face(input_image_path, known_encodes, known_names):
-    unknown_image = face_recognition.load_image_file(input_image_path)
-
-    unknown_encodings = face_recognition.face_encodings(unknown_image)
-
-    if len(unknown_encodings) == 0:
-        return "no_face_detected"
-
-    face_to_check = unknown_encodings[0]
-    distances = face_recognition.face_distance(known_encodes, face_to_check)
+    distances = face_recognition.face_distance(known_encodes, unknown_encoding[0])
 
     if len(distances) > 0:
         best_match_index = np.argmin(distances)
         if distances[best_match_index] < TOLERANCE:
-            return known_names[best_match_index]
+            return best_match_index
+    return UNKNOWN
 
-    return "unknown"
+@app.post("/recognize")
+async def recognize_face(session: Session = Depends(get_session)):
+    known_faces = session.exec(select(FaceTemplate)).all()
+    known_encodes = [np.array(f.embedding) for f in known_faces]
+
+    index = identify(known_encodes)
+
+    if index is None:
+        return {"status": "error", "message": "No faces detected."}
+
+    user_id = None if index == UNKNOWN else known_faces[index].user_id
+
+    date_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    status_label = "unknown" if user_id is None else f"user_{user_id}"
+    image_name = f"{status_label}_{date_str}.jpg"
+    
+    save_path = os.path.join(CAPTURE_DIR, image_name)
+
+    try:
+        os.makedirs(CAPTURE_DIR, exist_ok=True)
+        shutil.copy2(FILEPATH, save_path)
+        print(f"✅ Zdjęcie zapisane: {save_path}")
+    except Exception as e:
+        print(f"❌ Błąd kopiowania: {e}")
+
+    alert_data = {
+        "name": "Known face" if user_id else "Unknown face",
+        "time": date_str,
+        "image": image_name,
+        "isNew": True,
+        "captured_user_id": user_id
+    }
+
+    try:
+        requests.post(API_URL, json=alert_data)
+    except Exception as e:
+        print(f"❌ Błąd komunikacji z main.py: {e}")
+
+    return {"status": "success", "user_id": user_id}
 
 if __name__ == "__main__":
-    known_encodes, known_names = get_known_encodings(DIRECTORY)
     uvicorn.run(app, host="0.0.0.0", port=8001)
-
-# Camera script needs to wait for movement, take photo and save it, call face recognition from this file by API
-# This file recognizes it and posts the result to main.py
