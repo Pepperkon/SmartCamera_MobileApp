@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from typing import List
 from database import *
 from sqlalchemy.orm import selectinload
+from model import get_encoding
 
 load_dotenv()
 IP = os.environ.get("IP")
@@ -27,8 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-async def add_user_image_logic(user_id: int, file: UploadFile, session: Session):
-    new_template = FaceTemplate(filepath="pending", user_id=user_id)
+async def add_user_image_logic(user_id: int, file: UploadFile, face_encoding: list[float], session: Session):
+    new_template = FaceTemplate(filepath="pending", user_id=user_id, embedding=face_encoding)
     session.add(new_template)
     session.commit()
     session.refresh(new_template)
@@ -48,20 +49,6 @@ async def add_user_image_logic(user_id: int, file: UploadFile, session: Session)
 
     return new_template
 
-@app.post("/alerts")
-async def add_alert(item: AlertRead, session: Session = Depends(get_session)):
-    new_alert = Alert(
-        title=item.name,
-        time=item.time,
-        image=item.image,   # TODO - might need some changes
-    )
-
-    session.add(new_alert)
-    session.commit()
-    session.refresh(new_alert)
-
-    return new_alert
-
 @app.on_event("startup")
 def on_startup():
     SQLModel.metadata.create_all(engine)
@@ -78,12 +65,20 @@ async def get_users(session: Session = Depends(get_session)):
 
 @app.post("/users")
 async def create_user(name: str = Form(...), file: UploadFile = File(...), session: Session = Depends(get_session)):
+    face_encodings = get_encoding(file)
+
+    if len(face_encodings) == 0:
+        raise HTTPException(status_code=404, detail="No face detected")
+
+    if len(face_encodings) > 1:
+        raise HTTPException(status_code=404, detail="More than 1 face detected")
+
     new_user = User(name=name)
     session.add(new_user)
     session.commit()
     session.refresh(new_user)
 
-    await add_user_image_logic(new_user.id, file, session)
+    await add_user_image_logic(new_user.id, file, face_encodings[0], session)
 
     statement = select(User).where(User.id == new_user.id).options(
         selectinload(User.images), selectinload(User.alerts)
@@ -122,11 +117,19 @@ async def add_user_image(
     file: UploadFile = File(...),
     session: Session = Depends(get_session)
 ):
+    face_encodings = get_encoding(file)
+
+    if len(face_encodings) == 0:
+        raise HTTPException(status_code=404, detail="No face detected")
+
+    if len(face_encodings) > 1:
+        raise HTTPException(status_code=404, detail="More than 1 face detected")
+
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    await add_user_image_logic(user_id, file, session)
+    await add_user_image_logic(user_id, file, face_encodings[0], session)
 
     statement = select(User).where(User.id == user_id).options(
             selectinload(User.images),
@@ -151,6 +154,21 @@ async def get_user(user_id: int, session: Session = Depends(get_session)):
 async def get_alerts(session: Session = Depends(get_session)):
     """Zwraca listę wszystkich alertów."""
     return session.exec(select(Alert)).all()
+
+@app.post("/alerts")
+async def add_alert(item: AlertRead, session: Session = Depends(get_session)):
+    new_alert = Alert(
+        title=item.title,
+        time=item.time,
+        image=item.image,   # TODO - might need some changes
+        recognised_user_id=item.recognised_user_id
+    )
+
+    session.add(new_alert)
+    session.commit()
+    session.refresh(new_alert)
+
+    return new_alert
 
 @app.post("/alerts/{alert_id}/read")
 async def mark_as_read(alert_id: int, session: Session = Depends(get_session)):

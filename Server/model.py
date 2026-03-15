@@ -6,91 +6,95 @@ import numpy as np
 import cv2
 import requests
 from datetime import datetime
+from database import engine
+import sys
 
 API_URL = "http://localhost:8000/alerts"
-
-DIRECTORY = "data/images/users"
 TOLERANCE = 0.50
-FILEPATH = "test_photo.jpg"
-
-app = FastAPI()
+FILEPATH = "/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg"
+CAPTURE_DIR = "data/images/captured"
+UNKNOWN = -1
 
 @app.post("/recognize")
-async def recognize_face():
-    result = identify_face("test_photo.jpg", known_encodes, known_names)
+async def recognize_face(session: Session = Depends(get_session)):
+    known_faces = session.exec(select(FaceTemplate)).all()
+    known_encodes = [np.array(f.embedding) for f in known_faces]
 
-    print(result)
+    index = identify(known_encodes)
+
+    if index is None:
+        print("No faces detected.")
+        sys.exit(0)
+
+    user_id = None if index == UNKNOWN else known_faces[index].user_id
 
     date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    image_name = f"{result}-{date}.jpg"
+    status = "unknown" if user_id is None else f"user_{user_id}"
+    image_name = f"{status}_{date_label}.jpg"
 
     alert_data = {
-        "title": result,
-        "time": date,
-        "image": image_name
+        "title": "Known face" if user_id else "Unknown face",
+        "time": time_label,
+        "image": date,
+        "isNew": True,
+        "captured_user_id": user_id
     }
 
     requests.post(API_URL, json=alert_data)
 
+async def get_encoding(upload_file: UploadFile):
+    contents =  await upload_file.read()
+    image = face_recognition.load_image_file(io.BytesIO(contents))
+    return face_recognition.face_encodings(image)
 
-def get_known_encodings(directory):
-    known_encodes = []
-    known_names = []
+def identify(known_encodes, target_filepath=FILEPATH):
+    if not os.path.exists(target_filepath):
+        return None
 
-    for name in os.listdir(directory):
-        img_path = os.path.join(directory, name)
-        image = face_recognition.load_image_file(img_path)
-        encodings = face_recognition.face_encodings(image)
+    image = face_recognition.load_image_file(target_filepath)
+    unknown_encoding = face_recognition.face_encodings(image)
 
-        if len(encodings) > 0:
-            known_encodes.append(encodings[0])
-            known_names.append(os.path.splitext(name)[0])
-    return known_encodes, known_names
+    if len(unknown_encoding) == 0:
+        return None
 
-def identify_face(input_image_path, known_encodes, known_names):
-    unknown_image = face_recognition.load_image_file(input_image_path)
-
-    unknown_encodings = face_recognition.face_encodings(unknown_image)
-
-    if len(unknown_encodings) == 0:
-        return "no_face_detected"
-
-    face_to_check = unknown_encodings[0]
-    distances = face_recognition.face_distance(known_encodes, face_to_check)
+    # TODO: Alert for each separate face detected
+    distances = face_recognition.face_distance(known_encodes, unknown_encoding[0])
 
     if len(distances) > 0:
         best_match_index = np.argmin(distances)
         if distances[best_match_index] < TOLERANCE:
-            return known_names[best_match_index]
+            return best_match_index
+    return UNKNOWN
 
-    return "unknown"
 
-known_encodes, known_names = get_known_encodings(DIRECTORY)
+with Session(engine) as session:
+    known_faces = session.exec(select(FaceTemplate)).all()
+    known_encodes = [np.array(f.embedding) for f in known_faces]
 
-result = identify_face("test_photo.jpg", known_encodes, known_names)
+    index = identify(known_encodes)
 
-print(result)
+    if index is None:
+        print("No faces detected.")
+        sys.exit(0)
 
-date = datetime.now()
-date_label = date.strftime("%Y-%m-%d_%H-%M")
-time_label = date.strftime("%H:%M")
-image_name = f"{result}-{date_label}.jpg"
+    user_id = None if index == UNKNOWN else known_faces[index].user_id
 
-alert_data = {
-    "name": result,
-    "time": time_label,
-    "image": image_name
-}
+    date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    status = "unknown" if user_id is None else f"user_{user_id}"
+    image_name = f"{status}_{date}.jpg"
+    capture_path = os.path.join(CAPTURE_DIR, image_name)
 
-capture_path = os.path.join("images/captured/", image_name)
-try:
-    shutil.copy2("/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg", capture_path)
-except FileNotFoundError:
-    print(f"ERROR: File not found")
+    try:
+        shutil.copy2(FILEPATH, capture_path)
+    except Exception as e:
+        print(f"Błąd kopiowania: {e}")
 
-res = requests.post(API_URL, json=alert_data)
+    alert_data = {
+        "title": "Known face" if user_id else "Unknown face",
+        "time": date,
+        "image": image_name,
+        "isNew": True,
+        "captured_user_id": user_id
+    }
 
-print(res)
-
-# Camera script needs to wait for movement, take photo and save it, call face recognition from this file by API
-# This file recognizes it and posts the result to main.py
+    requests.post(API_URL, json=alert_data)

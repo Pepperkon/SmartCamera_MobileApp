@@ -1,4 +1,5 @@
 from sqlmodel import SQLModel, Field, select, Session, create_engine, Relationship
+from sqlalchemy import Column, JSON
 from typing import Optional, List
 
 DATABASE_URL = "sqlite:///data/database.db"
@@ -15,7 +16,7 @@ class AlertRead(SQLModel):
     time: str
     image: str
     isNew: bool
-    captured_user_id: Optional[int]
+    recognised_user_id: Optional[int]
 
 class FaceTemplateRead(SQLModel):
     id: int
@@ -41,7 +42,7 @@ class FaceTemplate(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
     filepath: str
-    # embedding: str TODO
+    embedding: List[float] = Field(sa_column=Column(JSON))
     user: "User" = Relationship(back_populates="images")
 
 class User(SQLModel, table=True):
