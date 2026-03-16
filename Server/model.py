@@ -7,7 +7,7 @@ import requests
 import uvicorn
 from datetime import datetime
 from sqlmodel import Session, select
-from database import engine, get_session, FaceTemplate # Importy z Twojej bazy
+from database import engine, get_session, FaceTemplate 
 import sys
 
 API_URL = "http://localhost:8000"
@@ -57,7 +57,8 @@ async def recognize_face(session: Session = Depends(get_session)):
     index = identify(known_encodes)
 
     now = datetime.now()
-    date_str = now.strftime("%Y-%m-%d_%H-%M-%S")
+    time_str = now.strftime("%H:%M:%S")
+    date_str = now.strftime("%d.%m.%Y")
     user_id = None
     
     if index is None:   # no face detected
@@ -77,7 +78,6 @@ async def recognize_face(session: Session = Depends(get_session)):
         status = f"user_{user_id}"
         print(f"Recognized user: {user_name}")
 
-    # 4. Kopiowanie zdjęcia (robimy to zawsze, żeby mieć dowód)
     image_name = f"{status}_{date_str}.jpg"
     os.makedirs(CAPTURE_DIR, exist_ok=True)
     capture_path = os.path.join(CAPTURE_DIR, image_name)
@@ -88,11 +88,11 @@ async def recognize_face(session: Session = Depends(get_session)):
     except Exception as e:
         print(f"Błąd kopiowania: {e}")
 
-    # 5. Przygotowanie i wysyłka alertu
     alert_data = {
 	"id": None,
         "title": title,
-        "time": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "time": time_str,
+        "date": date_str,
         "image": image_name,
         "isNew": True,
         "recognised_user_id": user_id  # Będzie to liczba lub None
@@ -101,7 +101,6 @@ async def recognize_face(session: Session = Depends(get_session)):
     try:
         r = requests.post(f"{API_URL}/alerts", json=alert_data)
         if r.status_code == 422:
-            # TO CI POWIE DOKŁADNIE CO JEST ŹLE
             print(f"Błąd walidacji (422): {r.json()}") 
         r.raise_for_status()
     except Exception as e:

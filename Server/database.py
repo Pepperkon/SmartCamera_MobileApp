@@ -14,6 +14,7 @@ class AlertRead(SQLModel):
     id: Optional[int]
     title: str
     time: str
+    date: str
     image: str
     isNew: bool
     recognised_user_id: Optional[int]
@@ -34,6 +35,7 @@ class Alert(SQLModel, table=True):
     title: str
     image: str
     time: str
+    date: str
     isNew: bool = Field(default=True)
     recognised_user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     user: Optional["User"] = Relationship(back_populates="alerts")
