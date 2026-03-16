@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 from database import engine, get_session, FaceTemplate # Importy z Twojej bazy
 import sys
 
-API_URL = "http://localhost:8000/alerts"
+API_URL = "http://localhost:8000"
 TOLERANCE = 0.50
 FILEPATH = "/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg"
 CAPTURE_DIR = "data/images/captured"
@@ -51,34 +51,31 @@ async def recognize_face(session: Session = Depends(get_session)):
     import requests
     from datetime import datetime
 
-    # 1. Pobranie wzorców
     known_faces = session.exec(select(FaceTemplate)).all()
     known_encodes = [np.array(f.embedding) for f in known_faces]
 
-    # 2. Próba identyfikacji
     index = identify(known_encodes)
 
-    # 3. Przygotowanie danych (Domyślnie dla "Brak twarzy")
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d_%H-%M-%S")
     user_id = None
     
-    if index is None:
-        # SCENARIUSZ A: Algorytm w ogóle nie znalazł twarzy
-        title = "Pusty kadr / Błąd detekcji"
+    if index is None:   # no face detected
+        title = "No face detected"
         status = "empty"
         print("No faces detected - sending empty alert.")
-    elif index == UNKNOWN:
-        # SCENARIUSZ B: Twarz jest, ale nie ma jej w bazie
-        title = "Nieznana osoba"
+    elif index == UNKNOWN:  # unknown face detected
+        title = "Unknown"
         status = "unknown"
         print("Unknown face detected.")
-    else:
-        # SCENARIUSZ C: Rozpoznano konkretnego użytkownika
+    else:   # known user detected
         user_id = known_faces[index].user_id
-        title = f"Rozpoznano: {known_faces[index].user_id}"
+        res = requests.get(f"{API_URL}/users/{user_id}")
+        user = res.json()
+        user_name = user["name"]
+        title = f"Detected: {user_name}"
         status = f"user_{user_id}"
-        print(f"Recognized user: {user_id}")
+        print(f"Recognized user: {user_name}")
 
     # 4. Kopiowanie zdjęcia (robimy to zawsze, żeby mieć dowód)
     image_name = f"{status}_{date_str}.jpg"
@@ -102,7 +99,7 @@ async def recognize_face(session: Session = Depends(get_session)):
     }
 
     try:
-        r = requests.post(API_URL, json=alert_data)
+        r = requests.post(f"{API_URL}/alerts", json=alert_data)
         if r.status_code == 422:
             # TO CI POWIE DOKŁADNIE CO JEST ŹLE
             print(f"Błąd walidacji (422): {r.json()}") 
