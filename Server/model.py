@@ -7,7 +7,7 @@ import requests
 import uvicorn
 from datetime import datetime
 from sqlmodel import Session, select
-from database import engine, get_session, FaceTemplate 
+from database import engine, get_session, FaceTemplate, User
 import sys
 
 API_URL = "http://localhost:8000"
@@ -59,6 +59,7 @@ async def recognize_face(session: Session = Depends(get_session)):
     now = datetime.now()
     time_str = now.strftime("%H:%M:%S")
     date_str = now.strftime("%d.%m.%Y")
+    time_stamp = now.strftime("%d.%m.%Y_%H-%M-%S")
     user_id = None
     
     if index is None:   # no face detected
@@ -71,14 +72,13 @@ async def recognize_face(session: Session = Depends(get_session)):
         print("Unknown face detected.")
     else:   # known user detected
         user_id = known_faces[index].user_id
-        res = requests.get(f"{API_URL}/users/{user_id}")
-        user = res.json()
-        user_name = user["name"]
+        user = session.get(User, user_id)
+        user_name = user.name
         title = f"Detected: {user_name}"
         status = f"user_{user_id}"
         print(f"Recognized user: {user_name}")
 
-    image_name = f"{status}_{date_str}.jpg"
+    image_name = f"{status}_{time_stamp}.jpg"
     os.makedirs(CAPTURE_DIR, exist_ok=True)
     capture_path = os.path.join(CAPTURE_DIR, image_name)
 
