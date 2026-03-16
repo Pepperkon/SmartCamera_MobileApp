@@ -162,6 +162,7 @@ async def add_alert(item: AlertRead, session: Session = Depends(get_session)):
     new_alert = Alert(
         title=item.title,
         time=item.time,
+        date=item.date,
         image=item.image,   # TODO - might need some changes
         recognised_user_id=item.recognised_user_id
     )
