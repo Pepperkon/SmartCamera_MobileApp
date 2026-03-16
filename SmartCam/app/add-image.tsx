@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Alert,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,6 +19,7 @@ import { addUserImage } from "@/services/userService";
 function NewImage() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const [loading, setLoading] = useState<boolean>(false);
 
   const [image, setImage] = useState<string | null>(null);
 
@@ -45,25 +47,40 @@ function NewImage() {
     }
 
     try {
+      setLoading(true);
       await addUserImage(id, image);
+      setLoading(false);
       Alert.alert("Sukces", "Zdjęcie dodane");
       setImage(null);
       router.back();
     } catch (e) {
       Alert.alert("Błąd", "Nie udało się połączyć z serwerem.");
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={GlobalStyles.container}>
+        <View style={[styles.container, { justifyContent: "center" }]}>
+          <ActivityIndicator size="large" color="white" />
+          <Text style={GlobalStyles.text_secondary}>Processing image...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={GlobalStyles.container}>
       <View style={styles.container}>
         <Pressable style={styles.button} onPress={pickImage}>
-          <Text style={{ fontSize: 20, color: "white" }}>Wybierz zdjęcie</Text>
+          <Text style={{ fontSize: 20, color: "white" }}>Choose image</Text>
         </Pressable>
         {image && <Image source={{ uri: image }} style={styles.preview} />}
         {image && (
           <Pressable style={styles.button} onPress={handleSave}>
-            <Text style={{ fontSize: 20, color: "white" }}>Zapisz</Text>
+            <Text style={{ fontSize: 20, color: "white" }}>Save</Text>
           </Pressable>
         )}
       </View>

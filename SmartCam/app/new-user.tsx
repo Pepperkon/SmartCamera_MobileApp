@@ -5,6 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -19,6 +20,7 @@ function NewUser() {
   const router = useRouter();
 
   const [name, setName] = useState("");
+  const [loading, setLoading] = useState<boolean>(false);
   const [image, setImage] = useState<string | null>(null);
 
   const pickImage = async () => {
@@ -40,15 +42,30 @@ function NewUser() {
     }
 
     try {
+      setLoading(true);
       await addUser(name, image);
+      setLoading(false);
       Alert.alert("Sukces", "Użytkownik dodany!");
       setName("");
       setImage(null);
       router.back();
     } catch (e) {
       Alert.alert("Błąd", "Nie udało się połączyć z serwerem.");
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={GlobalStyles.container}>
+        <View style={[styles.container, { justifyContent: "center" }]}>
+          <ActivityIndicator size="large" color="white" />
+          <Text style={GlobalStyles.text_secondary}>Adding user...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={GlobalStyles.container}>
