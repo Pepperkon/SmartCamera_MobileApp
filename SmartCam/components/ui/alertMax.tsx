@@ -59,7 +59,7 @@ function AlertMax() {
     );
   }
 
-  const filepath = `${API_URL}/images/captured/${alert.image}`;
+  const filepath = `${API_URL}/data/images/captured/${alert.image}`;
 
   const imageSource =
     typeof alert.image === "string"

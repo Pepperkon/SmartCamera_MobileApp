@@ -80,8 +80,7 @@ function UserMax() {
       </View>
     );
   }
-
-  const filepath = `${API_URL}/images/users/${user.id}/${user.images[0].filepath}`;
+  const filepath = `${API_URL}/data/images/users/${user.id}/${user.images[0].filepath}`;
   const imageSource = typeof user.images[0]
     ? { uri: filepath }
     : { uri: "https://ui-avatars.com/api/?name=" + user.name };
@@ -114,7 +113,7 @@ function UserMax() {
                 <Pressable onPress={() => setGalleryVisible(false)}>
                   <Image
                     source={{
-                      uri: `${API_URL}/images/users/${user.id}/${item.filepath}`,
+                      uri: `${API_URL}/data/images/users/${user.id}/${item.filepath}`,
                     }}
                     style={styles.fullScreenImage}
                     resizeMode="contain"
