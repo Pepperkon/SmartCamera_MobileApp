@@ -6,6 +6,7 @@ export interface AlertItem {
   title: string;
   image: ImageSourcePropType; // Obsłuży zarówno require(...), jak i { uri: '...' }
   time: string;
+  date: string;
   isNew: boolean;
   captured_user_id?: number;
 }

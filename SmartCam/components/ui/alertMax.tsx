@@ -69,7 +69,10 @@ function AlertMax() {
   return (
     <View style={styles.container}>
       <Text style={GlobalStyles.text_primary}>{alert.title}</Text>
-      <Text style={GlobalStyles.text_secondary}>{alert.time}</Text>
+      <View style={styles.row_container}>
+        <Text style={GlobalStyles.text_secondary}>{alert.time}</Text>
+        <Text style={GlobalStyles.text_secondary}>{alert.date}</Text>
+      </View>
 
       <Image source={imageSource} style={styles.image} />
 
@@ -111,6 +114,13 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.l,
     borderWidth: 9,
     borderColor: COLORS.background,
+  },
+  row_container: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 10,
+    width: "100%",
   },
 });
 
