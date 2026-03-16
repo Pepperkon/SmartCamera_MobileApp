@@ -65,8 +65,9 @@ async def get_users(session: Session = Depends(get_session)):
 
 @app.post("/users")
 async def create_user(name: str = Form(...), file: UploadFile = File(...), session: Session = Depends(get_session)):
-    face_encodings = get_encoding(file)
+    face_encodings = await get_encoding(file)
 
+    await file.seek(0)
     if len(face_encodings) == 0:
         raise HTTPException(status_code=404, detail="No face detected")
 
@@ -78,7 +79,7 @@ async def create_user(name: str = Form(...), file: UploadFile = File(...), sessi
     session.commit()
     session.refresh(new_user)
 
-    await add_user_image_logic(new_user.id, file, face_encodings[0], session)
+    await add_user_image_logic(new_user.id, file, face_encodings[0].tolist(), session)
 
     statement = select(User).where(User.id == new_user.id).options(
         selectinload(User.images), selectinload(User.alerts)
@@ -117,7 +118,7 @@ async def add_user_image(
     file: UploadFile = File(...),
     session: Session = Depends(get_session)
 ):
-    face_encodings = get_encoding(file)
+    face_encodings = await get_encoding(file)
 
     if len(face_encodings) == 0:
         raise HTTPException(status_code=404, detail="No face detected")
@@ -129,7 +130,8 @@ async def add_user_image(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    await add_user_image_logic(user_id, file, face_encodings[0], session)
+    await file.seek(0)
+    await add_user_image_logic(user_id, file, face_encodings[0].tolist(), session)
 
     statement = select(User).where(User.id == user_id).options(
             selectinload(User.images),
@@ -194,3 +196,10 @@ async def delete_alert(alert_id: int, session: Session = Depends(get_session)):
 
     return {"message": f"Alert {alert_id} was removed",
             "deleted_id": alert_id}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+# needed to change the way of starting the server due to face recognition not wanting to cooperate
+# to start the server type 'python main.py'

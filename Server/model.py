@@ -1,6 +1,6 @@
-import face_recognition
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, UploadFile
 import os
+import io
 import shutil
 import numpy as np
 import requests
@@ -19,6 +19,7 @@ UNKNOWN = -1
 app = FastAPI()
 
 def identify(known_encodes, target_filepath=FILEPATH):
+    import face_recognition
     if not os.path.exists(target_filepath):
         print(f"Błąd: Brak pliku {target_filepath}")
         return None
@@ -37,45 +38,79 @@ def identify(known_encodes, target_filepath=FILEPATH):
             return best_match_index
     return UNKNOWN
 
+async def get_encoding(upload_file: UploadFile):
+    import face_recognition
+
+    contents =  await upload_file.read()
+    image = face_recognition.load_image_file(io.BytesIO(contents))
+    return face_recognition.face_encodings(image)
+
 @app.post("/recognize")
 async def recognize_face(session: Session = Depends(get_session)):
+    import face_recognition
+    import requests
+    from datetime import datetime
+
+    # 1. Pobranie wzorców
     known_faces = session.exec(select(FaceTemplate)).all()
     known_encodes = [np.array(f.embedding) for f in known_faces]
 
+    # 2. Próba identyfikacji
     index = identify(known_encodes)
 
-    if index is None:
-        return {"status": "error", "message": "No faces detected."}
-
-    user_id = None if index == UNKNOWN else known_faces[index].user_id
-
-    date_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    status_label = "unknown" if user_id is None else f"user_{user_id}"
-    image_name = f"{status_label}_{date_str}.jpg"
+    # 3. Przygotowanie danych (Domyślnie dla "Brak twarzy")
+    now = datetime.now()
+    date_str = now.strftime("%Y-%m-%d_%H-%M-%S")
+    user_id = None
     
-    save_path = os.path.join(CAPTURE_DIR, image_name)
+    if index is None:
+        # SCENARIUSZ A: Algorytm w ogóle nie znalazł twarzy
+        title = "Pusty kadr / Błąd detekcji"
+        status = "empty"
+        print("No faces detected - sending empty alert.")
+    elif index == UNKNOWN:
+        # SCENARIUSZ B: Twarz jest, ale nie ma jej w bazie
+        title = "Nieznana osoba"
+        status = "unknown"
+        print("Unknown face detected.")
+    else:
+        # SCENARIUSZ C: Rozpoznano konkretnego użytkownika
+        user_id = known_faces[index].user_id
+        title = f"Rozpoznano: {known_faces[index].user_id}"
+        status = f"user_{user_id}"
+        print(f"Recognized user: {user_id}")
+
+    # 4. Kopiowanie zdjęcia (robimy to zawsze, żeby mieć dowód)
+    image_name = f"{status}_{date_str}.jpg"
+    os.makedirs(CAPTURE_DIR, exist_ok=True)
+    capture_path = os.path.join(CAPTURE_DIR, image_name)
 
     try:
-        os.makedirs(CAPTURE_DIR, exist_ok=True)
-        shutil.copy2(FILEPATH, save_path)
-        print(f"✅ Zdjęcie zapisane: {save_path}")
+        if os.path.exists(FILEPATH):
+            shutil.copy2(FILEPATH, capture_path)
     except Exception as e:
-        print(f"❌ Błąd kopiowania: {e}")
+        print(f"Błąd kopiowania: {e}")
 
+    # 5. Przygotowanie i wysyłka alertu
     alert_data = {
-        "name": "Known face" if user_id else "Unknown face",
-        "time": date_str,
+	"id": None,
+        "title": title,
+        "time": now.strftime("%Y-%m-%d %H:%M:%S"),
         "image": image_name,
         "isNew": True,
-        "captured_user_id": user_id
+        "recognised_user_id": user_id  # Będzie to liczba lub None
     }
 
     try:
-        requests.post(API_URL, json=alert_data)
+        r = requests.post(API_URL, json=alert_data)
+        if r.status_code == 422:
+            # TO CI POWIE DOKŁADNIE CO JEST ŹLE
+            print(f"Błąd walidacji (422): {r.json()}") 
+        r.raise_for_status()
     except Exception as e:
-        print(f"❌ Błąd komunikacji z main.py: {e}")
+        print(f"Błąd wysyłania alertu: {e}")
 
-    return {"status": "success", "user_id": user_id}
+    return {"status": "processed", "result": status}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)
