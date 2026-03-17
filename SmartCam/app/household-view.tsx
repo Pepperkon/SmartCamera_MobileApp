@@ -15,7 +15,7 @@ function HouseholdView() {
   return (
     <SafeAreaView style={GlobalStyles.container}>
       <UserList></UserList>
-      <CircleButton iconName="add" onPress={addUser}></CircleButton>
+      <CircleButton iconName="plus" onPress={addUser}></CircleButton>
     </SafeAreaView>
   );
 }

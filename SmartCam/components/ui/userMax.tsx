@@ -93,11 +93,11 @@ function UserMax() {
       </Pressable>
 
       <View style={styles.button_container}>
-        <CircleButton iconName="trash" onPress={handleDelete} />
+        <CircleButton iconName="delete" onPress={handleDelete} />
         <CircleButton iconName="download" />
       </View>
       <View style={styles.button_container}>
-        <CircleButton iconName="add" onPress={addImage} />
+        <CircleButton iconName="plus" onPress={addImage} />
       </View>
 
       <Modal visible={isGalleryVisble} transparent={true} animationType="fade">

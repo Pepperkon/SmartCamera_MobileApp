@@ -11,21 +11,17 @@ export const GlobalStyles = StyleSheet.create({
 
   singleEntry: {
     width: "100%",
-    // ZAMIAST height: "15%", używamy paddingu i opcjonalnie minHeight
-    paddingVertical: SPACING.m, // Odstęp góra-dół
-    paddingHorizontal: SPACING.m, // Odstęp lewo-prawo
-    minHeight: 80, // Minimalna wysokość, żeby zawsze dobrze wyglądało
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.m,
+    minHeight: 80,
 
-    borderRadius: 15, // Nieco mniejsze zaokrąglenie wygląda lepiej na paskach
+    borderRadius: 15,
 
-    flexDirection: "row", // Przygotowanie pod ikonę obok tekstu
-    justifyContent: "space-between", // Tekst zaczyna się od lewej
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: COLORS.primary,
 
-    // USUWAMY margin, bo używamy 'gap' w FlatList
-
-    // Dodajemy delikatny cień, żeby alert "wystawał"
     elevation: 3,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -49,9 +45,9 @@ export const GlobalStyles = StyleSheet.create({
   },
 
   mark: {
-    position: "absolute", // Klucz do sukcesu!
-    top: -8, // Ujemna wartość sprawia, że wystaje do góry
-    right: -8, // Ujemna wartość sprawia, że wystaje w prawo
+    position: "absolute",
+    top: -8,
+    right: -8,
     zIndex: 1,
   },
 });

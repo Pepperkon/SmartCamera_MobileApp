@@ -9,6 +9,7 @@ import { useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
 import AlertMin from "./alertMin";
+import SearchBar from "./searchBar";
 
 function EntryList() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -38,7 +39,7 @@ function EntryList() {
 
   const markAsRead = async (id: string) => {
     const updatedAlerts = alerts.map((alert) =>
-      alert.id === id ? { ...alert, isNew: false } : alert
+      alert.id === id ? { ...alert, isNew: false } : alert,
     );
     setAlerts(updatedAlerts);
     await saveAlertsToCache(updatedAlerts);
@@ -58,7 +59,7 @@ function EntryList() {
       };
 
       updateFromCache();
-    }, [])
+    }, []),
   );
 
   if (isLoading) {
@@ -70,17 +71,20 @@ function EntryList() {
   }
 
   return (
-    <FlatList
-      data={alerts}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <AlertMin alert={item} markAsRead={markAsRead}></AlertMin>
-      )}
-      onRefresh={handleRefresh}
-      refreshing={isRefreshing}
-      contentContainerStyle={styles.listContent}
-      style={{ flex: 1, width: "100%", height: "100%" }}
-    />
+    <>
+      <SearchBar></SearchBar>
+      <FlatList
+        data={alerts}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <AlertMin alert={item} markAsRead={markAsRead}></AlertMin>
+        )}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        contentContainerStyle={styles.listContent}
+        style={{ flex: 1, width: "100%", height: "100%" }}
+      />
+    </>
   );
 }
 

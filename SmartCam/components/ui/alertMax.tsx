@@ -77,7 +77,7 @@ function AlertMax() {
       <Image source={imageSource} style={styles.image} />
 
       <View style={styles.button_container}>
-        <CircleButton iconName="trash" onPress={handleDelete} />
+        <CircleButton iconName="delete" onPress={handleDelete} />
         <CircleButton iconName="download" />
       </View>
 
