@@ -14,29 +14,28 @@ API_URL = "http://localhost:8000"
 TOLERANCE = 0.50
 FILEPATH = "/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg"
 CAPTURE_DIR = "data/images/captured"
-UNKNOWN = -1
 
 app = FastAPI()
 
-def identify(known_encodes, target_filepath=FILEPATH):
+def identify(known_encodes, image):
     import face_recognition
-    if not os.path.exists(target_filepath):
-        print(f"Błąd: Brak pliku {target_filepath}")
-        return None
 
-    image = face_recognition.load_image_file(target_filepath)
-    unknown_encoding = face_recognition.face_encodings(image)
+    locations = face_recognition.face_locations(image)
+    unknown_encodings = face_recognition.face_encodings(image, locations)
 
-    if len(unknown_encoding) == 0:
-        return None
+    indexes = []
+    for unknown_encoding in unknown_encodings:
+        distances = face_recognition.face_distance(known_encodes, unknown_encoding)
+        if len(distances) > 0:
+            best_match_index = np.argmin(distances)
+            if distances[best_match_index] < TOLERANCE:
+                indexes.append(best_match_index)
+            else:
+                indexes.append(None)
+        else:
+            indexes.append(None)
 
-    distances = face_recognition.face_distance(known_encodes, unknown_encoding[0])
-
-    if len(distances) > 0:
-        best_match_index = np.argmin(distances)
-        if distances[best_match_index] < TOLERANCE:
-            return best_match_index
-    return UNKNOWN
+    return indexes, locations
 
 async def get_encoding(upload_file: UploadFile):
     import face_recognition
@@ -45,68 +44,94 @@ async def get_encoding(upload_file: UploadFile):
     image = face_recognition.load_image_file(io.BytesIO(contents))
     return face_recognition.face_encodings(image)
 
+
+def send_alert(alert_data: dict):
+    try:
+        r = requests.post(f"{API_URL}/alerts", json=alert_data)
+        if r.status_code == 422:
+            print(f"Błąd walidacji (422): {r.json()}")
+        r.raise_for_status()
+    except Exception as e:
+        print(f"Błąd wysyłania alertu: {e}")
+
 @app.post("/recognize")
 async def recognize_face(session: Session = Depends(get_session)):
     import face_recognition
     import requests
     from datetime import datetime
+    from PIL import Image, ImageDraw
+
+    if not os.path.exists(FILEPATH):
+        return {"status": "error", "message": "File not found"}
 
     known_faces = session.exec(select(FaceTemplate)).all()
     known_encodes = [np.array(f.embedding) for f in known_faces]
 
-    index = identify(known_encodes)
+    image = face_recognition.load_image_file(FILEPATH)
+
+    indexes, locations = identify(known_encodes, image)
 
     now = datetime.now()
     time_str = now.strftime("%H:%M:%S")
     date_str = now.strftime("%d.%m.%Y")
     time_stamp = now.strftime("%d.%m.%Y_%H-%M-%S")
-    user_id = None
-    
-    if index is None:   # no face detected
-        title = "No face detected"
-        status = "empty"
+
+    if not indexes:
         print("No faces detected - sending empty alert.")
-    elif index == UNKNOWN:  # unknown face detected
-        title = "Unknown"
-        status = "unknown"
-        print("Unknown face detected.")
-    else:   # known user detected
-        user_id = known_faces[index].user_id
-        user = session.get(User, user_id)
-        user_name = user.name
-        title = f"Detected: {user_name}"
-        status = f"user_{user_id}"
-        print(f"Recognized user: {user_name}")
+        status = "empty"
+        image_name = f"{status}_{time_stamp}.jpg"
+        os.makedirs(CAPTURE_DIR, exist_ok=True)
+        capture_path = os.path.join(CAPTURE_DIR, image_name)
+        try:
+            if os.path.exists(FILEPATH):
+                shutil.copy2(FILEPATH, capture_path)
+        except Exception as e:
+            print(f"Błąd kopiowania: {e}")
+        send_alert({
+            "id": None,
+            "title": "No face detected",
+            "time": time_str,
+            "date": date_str,
+            "image": image_name,
+            "isNew": True,
+            "recognised_user_id": None
+        })
+        return {"status": "processed", "result": "empty"}
 
-    image_name = f"{status}_{time_stamp}.jpg"
-    os.makedirs(CAPTURE_DIR, exist_ok=True)
-    capture_path = os.path.join(CAPTURE_DIR, image_name)
+    for i in range(len(indexes)):
+        user_id = None
+        if indexes[i] is not None:
+            user_id = known_faces[indexes[i]].user_id
+            user = session.get(User, user_id)
+            title = f"Detected: {user.name}"
+            status = f"user_{user_id}"
+            print(f"Recognized user: {user.name}")
+        else:
+            title = "Unknown"
+            status = "unknown"
+            print("Unknown face detected.")
 
-    try:
-        if os.path.exists(FILEPATH):
-            shutil.copy2(FILEPATH, capture_path)
-    except Exception as e:
-        print(f"Błąd kopiowania: {e}")
+        image_name = f"{status}_{time_stamp}_{i}.jpg"
+        os.makedirs(CAPTURE_DIR, exist_ok=True)
+        capture_path = os.path.join(CAPTURE_DIR, image_name)
 
-    alert_data = {
-	"id": None,
-        "title": title,
-        "time": time_str,
-        "date": date_str,
-        "image": image_name,
-        "isNew": True,
-        "recognised_user_id": user_id  # Będzie to liczba lub None
-    }
+        im = Image.fromarray(image)
+        d = ImageDraw.Draw(im)
+        top, right, bottom, left = locations[i]
+        d.rectangle([left, top, right, bottom], outline="red", width=3)
+        im.save(capture_path)
 
-    try:
-        r = requests.post(f"{API_URL}/alerts", json=alert_data)
-        if r.status_code == 422:
-            print(f"Błąd walidacji (422): {r.json()}") 
-        r.raise_for_status()
-    except Exception as e:
-        print(f"Błąd wysyłania alertu: {e}")
+        send_alert({
+            "id": None,
+            "title": title,
+            "time": time_str,
+            "date": date_str,
+            "image": image_name,
+            "isNew": True,
+            "recognised_user_id": user_id
+        })
 
-    return {"status": "processed", "result": status}
+    return {"status": "processed", "result": "TEMPORARY RESULT"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)
