@@ -15,6 +15,11 @@ function EntryList() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredAlerts = alerts.filter((alert) =>
+    alert.title.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   const syncWithCache = async () => {
     const cachedData = await getAlertsFromCache();
@@ -64,9 +69,9 @@ function EntryList() {
 
   return (
     <>
-      <SearchBar></SearchBar>
+      <SearchBar value={searchQuery} onChangeText={setSearchQuery}></SearchBar>
       <FlatList
-        data={alerts}
+        data={filteredAlerts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <AlertMin alert={item} markAsRead={markAsRead}></AlertMin>

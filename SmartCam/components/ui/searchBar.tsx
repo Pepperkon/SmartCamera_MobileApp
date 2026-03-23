@@ -5,10 +5,20 @@ import { Text, TextInput, View } from "react-native";
 import { Image, Pressable, StyleSheet } from "react-native";
 import CircleButton from "./circleButton";
 
-function SearchBar() {
+interface Props {
+  value: string;
+  onChangeText: (text: string) => void;
+}
+
+function SearchBar({ value, onChangeText }: Props) {
   return (
     <View style={styles.container}>
-      <TextInput style={styles.input} placeholder="Search"></TextInput>
+      <TextInput
+        style={styles.input}
+        placeholder="Search"
+        value={value}
+        onChangeText={onChangeText}
+      ></TextInput>
       <CircleButton iconName="filter" color="primary"></CircleButton>
     </View>
   );
