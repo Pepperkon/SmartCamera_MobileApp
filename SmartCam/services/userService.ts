@@ -57,7 +57,7 @@ export const addUser = async (name: string, imageUri: string) => {
     },
   });
 
-  return await response.json();
+  return await response;
 };
 
 export const addUserImage = async (id: string, imageUri: string) => {

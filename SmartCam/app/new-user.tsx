@@ -43,14 +43,28 @@ function NewUser() {
 
     try {
       setLoading(true);
-      await addUser(name, image);
+      const res = await addUser(name, image);
       setLoading(false);
-      Alert.alert("Sukces", "Użytkownik dodany!");
+      switch (res.status) {
+        case 200:
+          Alert.alert("Success", "The user has been successfully added.");
+          break;
+
+        case 404:
+          Alert.alert(
+            "Invalid Photo",
+            "A face must be present in the image to continue.",
+          );
+          break;
+
+        default:
+          Alert.alert("Something went wrong", `Error code: ${res.status}`);
+      }
       setName("");
       setImage(null);
       router.back();
     } catch (e) {
-      Alert.alert("Błąd", "Nie udało się połączyć z serwerem.");
+      Alert.alert("Network Error", "The server is unreachable.");
     } finally {
       setLoading(false);
     }
