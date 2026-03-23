@@ -78,7 +78,7 @@ export const addUserImage = async (id: string, imageUri: string) => {
     body: formData,
   });
 
-  return await response.json();
+  return await response;
 };
 
 export const deleteUser = async (id: string) => {

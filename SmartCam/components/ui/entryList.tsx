@@ -16,21 +16,23 @@ function EntryList() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
 
+  const syncWithCache = async () => {
+    const cachedData = await getAlertsFromCache();
+    if (cachedData) {
+      setAlerts(cachedData);
+    }
+    setIsLoading(false);
+  };
+
   const loadData = async (forceRefresh = false) => {
     if (forceRefresh) setRefreshing(true);
 
-    try {
-      const freshData = await fetchAlerts();
-      if (freshData && freshData.length > 0) {
-        setAlerts(freshData);
-        await saveAlertsToCache(freshData);
-      }
-    } catch (error) {
-      console.error("Błąd pobierania:", error);
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
+    const freshData = await fetchAlerts();
+    await saveAlertsToCache(freshData);
+
+    setAlerts(freshData);
+    setIsLoading(false);
+    setRefreshing(false);
   };
 
   const handleRefresh = () => {
@@ -47,18 +49,8 @@ function EntryList() {
 
   useFocusEffect(
     useCallback(() => {
-      const updateFromCache = async () => {
-        const cachedData = await getAlertsFromCache();
-
-        if (cachedData && cachedData.length > 0) {
-          setAlerts(cachedData);
-          setIsLoading(false);
-        } else {
-          await loadData();
-        }
-      };
-
-      updateFromCache();
+      syncWithCache();
+      loadData();
     }, []),
   );
 
