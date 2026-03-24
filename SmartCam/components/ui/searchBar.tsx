@@ -4,6 +4,7 @@ import React from "react";
 import { Text, TextInput, View } from "react-native";
 import { Image, Pressable, StyleSheet } from "react-native";
 import CircleButton from "./circleButton";
+import { useRouter } from "expo-router";
 
 interface Props {
   value: string;
@@ -11,6 +12,8 @@ interface Props {
 }
 
 function SearchBar({ value, onChangeText }: Props) {
+  const router = useRouter();
+
   return (
     <View style={styles.container}>
       <TextInput
@@ -19,7 +22,11 @@ function SearchBar({ value, onChangeText }: Props) {
         value={value}
         onChangeText={onChangeText}
       ></TextInput>
-      <CircleButton iconName="filter" color="primary"></CircleButton>
+      <CircleButton
+        iconName="filter"
+        color="primary"
+        onPress={() => router.push("/filters")}
+      ></CircleButton>
     </View>
   );
 }
