@@ -81,6 +81,8 @@ async def create_user(name: str = Form(...), file: UploadFile = File(...), sessi
 
     await add_user_image_logic(new_user.id, file, face_encodings[0].tolist(), session)
 
+    rematch_unknown_faces(new_user.id, face_encodings[0], session)
+
     statement = select(User).where(User.id == new_user.id).options(
         selectinload(User.images), selectinload(User.alerts)
     )
