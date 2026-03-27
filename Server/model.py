@@ -10,6 +10,8 @@ from sqlmodel import Session, select
 from database import engine, get_session, FaceTemplate, User
 import sys
 
+FaceEncoding = np.ndarray
+FaceLocation = tuple[int, int, int, int]
 API_URL = "http://localhost:8000"
 TOLERANCE = 0.50
 FILEPATH = "/home/raspi/SmartCamera_MobileApp/Server/test_photo.jpg"
@@ -17,7 +19,11 @@ CAPTURE_DIR = "data/images/captured"
 
 app = FastAPI()
 
-def identify(known_encodes, image):
+
+def identify(
+    known_encodes: list[FaceEncoding],
+    image: np.ndarray
+) -> tuple[list[int | None], list[FaceLocation], list[FaceEncoding]]:
     import face_recognition
 
     locations = face_recognition.face_locations(image)
@@ -35,17 +41,16 @@ def identify(known_encodes, image):
         else:
             indexes.append(None)
 
-    return indexes, locations
+    return indexes, locations, unknown_encodings
 
-async def get_encoding(upload_file: UploadFile):
+async def get_encoding(upload_file: UploadFile) -> list[FaceEncoding]:
     import face_recognition
 
     contents =  await upload_file.read()
     image = face_recognition.load_image_file(io.BytesIO(contents))
     return face_recognition.face_encodings(image)
 
-
-def send_alert(alert_data: dict):
+def send_alert(alert_data: AlertRead) -> None:
     try:
         r = requests.post(f"{API_URL}/alerts", json=alert_data)
         if r.status_code == 422:
@@ -55,7 +60,7 @@ def send_alert(alert_data: dict):
         print(f"Błąd wysyłania alertu: {e}")
 
 @app.post("/recognize")
-async def recognize_face(session: Session = Depends(get_session)):
+async def recognize_face(session: Session = Depends(get_session)) -> dict[str, str]:
     import face_recognition
     import requests
     from datetime import datetime
@@ -69,7 +74,7 @@ async def recognize_face(session: Session = Depends(get_session)):
 
     image = face_recognition.load_image_file(FILEPATH)
 
-    indexes, locations = identify(known_encodes, image)
+    indexes, locations, embeddings = identify(known_encodes, image)
 
     now = datetime.now()
     time_str = now.strftime("%H:%M:%S")
@@ -94,7 +99,8 @@ async def recognize_face(session: Session = Depends(get_session)):
             "date": date_str,
             "image": image_name,
             "isNew": True,
-            "recognised_user_id": None
+            "recognised_user_id": None,
+            "embedding": []
         })
         return {"status": "processed", "result": "empty"}
 
@@ -128,7 +134,8 @@ async def recognize_face(session: Session = Depends(get_session)):
             "date": date_str,
             "image": image_name,
             "isNew": True,
-            "recognised_user_id": user_id
+            "recognised_user_id": user_id,
+            "embedding": embeddings[i].tolist()
         })
 
     return {"status": "processed", "result": "TEMPORARY RESULT"}
