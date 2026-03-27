@@ -19,11 +19,28 @@ CAPTURE_DIR = "data/images/captured"
 
 app = FastAPI()
 
+def rematch_unknown_faces(new_user_id: int, new_user_image: FaceEncoding, session: Session) -> None:
+    import face_recognition
+    statement = select(Alert).where(Alert.recognised_user_id == None, Alert.embedding != None)
+    alerts = session.exec(statement).all()
+    if not alerts:
+        return
 
-def identify(
-    known_encodes: list[FaceEncoding],
-    image: np.ndarray
-) -> tuple[list[int | None], list[FaceLocation], list[FaceEncoding]]:
+    alerts_encodes = [np.array(alert.embedding) for alert in alerts]
+
+    distances = face_recognition.face_distance(alerts_encodes, new_user_image)
+    indices = np.where(distances < TOLERANCE)[0]
+    user = session.get(User, new_user_id)
+    if not user:
+        return
+
+    for index in indices:
+        alerts[index].recognised_user_id = new_user_id
+        alerts[index].title = f"Detected: {user.name}"
+        session.add(alerts[index])
+    session.commit()
+
+def identify(known_encodes: list[FaceEncoding], image: np.ndarray) -> tuple[list[int | None], list[FaceLocation], list[FaceEncoding]]:
     import face_recognition
 
     locations = face_recognition.face_locations(image)
