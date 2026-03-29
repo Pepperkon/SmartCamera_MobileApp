@@ -10,6 +10,7 @@ from typing import List
 from database import *
 from sqlalchemy.orm import selectinload
 from model import get_encoding
+import asyncio
 
 load_dotenv()
 IP = os.environ.get("IP")
@@ -49,11 +50,29 @@ async def add_user_image_logic(user_id: int, file: UploadFile, face_encoding: li
 
     return new_template
 
+async def cleanup_alerts(interval_seconds: int, max_age_hours: int):
+    while True:
+        threshold = datetime.now() - timedelta(hours=max_age_hours)
+        with Session(engine) as session:
+            old_alerts = session.exec(select(Alert).where(Alert.created_at < threshold)).all()
+            for old_alert in old_alerts:
+                image_path = f"data/images/captured/{old_alert.image}"
+                if os.path.isfile(image_path):
+                    try:
+                        os.remove(image_path)
+                    except Exception as e:
+                        print(f"Could not delete file {image_path}: {e}")
+            session.exec(delete(Alert).where(Alert.created_at < threshold))
+            session.commit()
+            print(f"Deleted {len(old_alerts)} alerts")
+        await asyncio.sleep(interval_seconds)
+
 @app.on_event("startup")
 def on_startup():
     SQLModel.metadata.create_all(engine)
     os.makedirs("data/images/users", exist_ok=True)
     os.makedirs("data/images/captured", exist_ok=True)
+    asyncio.create_task(cleanup_alerts(interval_seconds=3600, max_age_hours=24))
 
 
 @app.get("/users", response_model=List[UserRead])

@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, select, Session, create_engine, Relationship
+from sqlmodel import SQLModel, Field, select, Session, create_engine, Relationship, delete
 from sqlalchemy import Column, JSON
 from typing import Optional, List
 
@@ -39,6 +39,7 @@ class Alert(SQLModel, table=True):
     isNew: bool = Field(default=True)
     recognised_user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     user: Optional["User"] = Relationship(back_populates="alerts")
+    created_at: datetime = Field(default_factory=lambda: datetime.now())
 
 class FaceTemplate(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
