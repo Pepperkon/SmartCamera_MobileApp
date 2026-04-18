@@ -11,7 +11,7 @@ def get_session():
 
 
 class AlertRead(SQLModel):
-    id: Optional[int]
+    id: Optional[int] = None
     title: str
     time: str
     date: str
