@@ -9,13 +9,13 @@ from pydantic import BaseModel
 from typing import List
 from database import *
 from sqlalchemy.orm import selectinload
-from model import get_encoding
+import requests
 
 load_dotenv()
-IP = os.environ.get("IP")
+MODEL_URL = os.environ.get("MODEL_URL")
 
-if not IP:
-    raise RuntimeError("IP not found, check README for instructions")
+if not MODEL_URL:
+    raise RuntimeError("MODEL_URL not found, check README for instructions")
 
 app = FastAPI()
 
@@ -27,6 +27,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+async def get_encoding_from_model(file: UploadFile):
+    try:
+        files = {"file": (file.filename, await file.read(), file.content_type)}
+        response = requests.post(f"{MODEL_URL}/encode", files=files)
+        await file.seek(0)
+        return response.json().get("encodings")
+    except Exception as e:
+        print(f"Error while connecting to the model: {e}")
+        return None
+
 
 async def add_user_image_logic(user_id: int, file: UploadFile, face_encoding: list[float], session: Session):
     new_template = FaceTemplate(filepath="pending", user_id=user_id, embedding=face_encoding)
@@ -55,7 +66,14 @@ def on_startup():
     os.makedirs("data/images/users", exist_ok=True)
     os.makedirs("data/images/captured", exist_ok=True)
 
+# Making it available for the model to get the embeddings of known users
+@app.get("/templates")
+async def get_templates(session: Session = Depends(get_session)):
+    statement = select(FaceTemplate)
+    results = session.exec(statement).all()
+    return [{"user_id": f.user_id, "embedding": f.embedding} for f in results]
 
+# Displaying users in the mobile app
 @app.get("/users", response_model=List[UserRead])
 async def get_users(session: Session = Depends(get_session)):
     """Zwraca listę wszystkich użytkowników."""
@@ -63,23 +81,29 @@ async def get_users(session: Session = Depends(get_session)):
     results = session.exec(statement).all()
     return results
 
+# Creating a new user
 @app.post("/users")
 async def create_user(name: str = Form(...), file: UploadFile = File(...), session: Session = Depends(get_session)):
-    face_encodings = await get_encoding(file)
+    face_encodings = await get_encoding_from_model(file)
 
-    await file.seek(0)
+    if face_encodings is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model server is not responding or returned an error."
+        )
+
     if len(face_encodings) == 0:
-        raise HTTPException(status_code=404, detail="No face detected")
+        raise HTTPException(status_code=404, detail="NO_FACE")
 
     if len(face_encodings) > 1:
-        raise HTTPException(status_code=404, detail="More than 1 face detected")
+        raise HTTPException(status_code=404, detail="MULTIPLE_FACES")
 
     new_user = User(name=name)
     session.add(new_user)
     session.commit()
     session.refresh(new_user)
 
-    await add_user_image_logic(new_user.id, file, face_encodings[0].tolist(), session)
+    await add_user_image_logic(new_user.id, file, face_encodings[0], session)
 
     statement = select(User).where(User.id == new_user.id).options(
         selectinload(User.images), selectinload(User.alerts)
@@ -88,6 +112,7 @@ async def create_user(name: str = Form(...), file: UploadFile = File(...), sessi
 
     return full_user
 
+# Deleting a user
 @app.delete("/users/{user_id}")
 async def delete_user(user_id: int, session: Session = Depends(get_session)):
     statement = select(User).where(User.id == user_id).options(selectinload(User.images))
@@ -112,13 +137,14 @@ async def delete_user(user_id: int, session: Session = Depends(get_session)):
     return {"message": f"User {user_id} and all their data removed",
             "deleted_id": user_id}
 
+# Adding a new image for a user
 @app.post("/users/{user_id}/images", response_model=UserRead)
 async def add_user_image(
     user_id: int,
     file: UploadFile = File(...),
     session: Session = Depends(get_session)
 ):
-    face_encodings = await get_encoding(file)
+    face_encodings = await get_encoding_from_model(file)
 
     if len(face_encodings) == 0:
         raise HTTPException(status_code=404, detail="No face detected")
@@ -131,7 +157,7 @@ async def add_user_image(
         raise HTTPException(status_code=404, detail="User not found")
 
     await file.seek(0)
-    await add_user_image_logic(user_id, file, face_encodings[0].tolist(), session)
+    await add_user_image_logic(user_id, file, face_encodings[0], session)
 
     statement = select(User).where(User.id == user_id).options(
             selectinload(User.images),
@@ -141,9 +167,9 @@ async def add_user_image(
 
     return updated_user
 
+# Get information about a certain user
 @app.get("/users/{user_id}", response_model=UserRead)
 async def get_user(user_id: int, session: Session = Depends(get_session)):
-    """Pobiera dane konkretnego użytkownika wraz z jego zdjęciami."""
     statement = select(User).where(User.id == user_id).options(selectinload(User.images))
     user = session.exec(statement).first()
 
@@ -152,15 +178,31 @@ async def get_user(user_id: int, session: Session = Depends(get_session)):
 
     return user
 
+# Returns the list of all alerts
 @app.get("/alerts", response_model=List[AlertRead])
 async def get_alerts(session: Session = Depends(get_session)):
-    """Zwraca listę wszystkich alertów."""
     return session.exec(select(Alert)).all()
 
+# Uploading a captured image
+@app.post("/upload-captured")
+async def upload_captured(file: UploadFile = File(...)):
+    filepath = f"data/images/captured/{file.filename}"
+
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {"status": "success"}
+
+# Creating an alert
 @app.post("/alerts")
 async def add_alert(item: AlertRead, session: Session = Depends(get_session)):
+    title = item.title
+    if item.recognised_user_id:
+        user = session.get(User, item.recognised_user_id)
+        if user:
+            title = f"Detected: {user.name}"
     new_alert = Alert(
-        title=item.title,
+        title=title,
         time=item.time,
         date=item.date,
         image=item.image,   # TODO - might need some changes
@@ -173,6 +215,7 @@ async def add_alert(item: AlertRead, session: Session = Depends(get_session)):
 
     return new_alert
 
+# Checking alert's status from New to Read
 @app.post("/alerts/{alert_id}/read")
 async def mark_as_read(alert_id: int, session: Session = Depends(get_session)):
     """Znajduje alert po ID i zmienia isNew na False."""
@@ -184,6 +227,7 @@ async def mark_as_read(alert_id: int, session: Session = Depends(get_session)):
     session.commit()
     return {"status": "success", "message": f"Alert {alert_id} przeczytany"}
 
+# Deleting an alert
 @app.delete("/alerts/{alert_id}")
 async def delete_alert(alert_id: int, session: Session = Depends(get_session)):
 

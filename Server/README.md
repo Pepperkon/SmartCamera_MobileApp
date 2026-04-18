@@ -1,48 +1,37 @@
-1. **Ustawienie adresu IP (tylko raz):**
+# Backend Server
+This is the central hub of the SmartCam system. It manages the SQLite database, handles user registrations, stores alert history, and serves captured images to the mobile application.
 
-Po pierwszym pobraniu, stwórz plik .env w folderze Server. W nim wpisz swój adres IP, przykład:
+---
 
-```bash
-IP='192.168.0.59'
-```
+## Getting Started
 
-Dzięki temu już nigdy nie trzeba będzie go zmieniać. W części SmartCam jeszcze nie zostało to wprowadzone, więc tam trzeba zmienić pliki w folderze **services**
+1. **Prerequisites**
+    - Python 3.13+
+    - uv (Modern Python package manager - [Install uv](https://github.com/astral-sh/uv))
 
-2. **Instalacja uv (tylko raz):**
+2. **Environment Configuration**
 
-- **Linux/WSL**:
-    ```bash
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    ```
-- **Windows**:
-    ```bash
-    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    Create a .env file in this directory to store your network configuration (URL to connect with the device that runs the model):
+    
+    ```text
+    MODEL_URL=http://192.168.1.XX:8001
     ```
 
-3. **Przygotowanie środowiska (zawsze po git pull w folderze Server):**
+3. **Installation**
 
-```bash
-uv sync
-```
+    Using ```uv```, you can install all dependencies and set up the virtual environment with a single command:
+    ```bash
+    uv sync
+    ```
+4. **Running the Server**
 
-Ta jedna komenda zrobi wszystko za Ciebie:
+    To start the central server, run:
+    ```bash
+    uv run main.py
+    ```
+5. **Adding new packages**
 
-- Pobierze odpowiednią wersję Pythona.
-- Stworzy wirtualne środowisko .venv.
-- Zainstaluje wszystkie biblioteki z pliku pyproject.toml.
-
-4. **Uruchamianie serwera:**
-
-```bash
-uv run uvicorn main:app --host 0.0.0.0 --port 8000
-```
-Hot Reload:
-```bash
-uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-## Jak dodać nową bibliotekę?
-
-```bash
-uv add nazwa_paczki
-```
+    If you want to add a new package to the project use the following command:
+    ```bash
+    uv add package-name
+    ```
