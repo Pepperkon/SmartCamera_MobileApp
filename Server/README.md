@@ -14,7 +14,7 @@ This is the central hub of the SmartCam system. It manages the SQLite database, 
     Create a .env file in this directory to store your network configuration (URL to connect with the device that runs the model):
     
     ```text
-    MODEL_URL=http://192.168.1.XX:8001
+    MODEL_URL=http://192.168.X.X:8001
     ```
 
 3. **Installation**

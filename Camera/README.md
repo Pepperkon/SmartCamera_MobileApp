@@ -15,7 +15,7 @@ This module is responsible for the physical interface with the camera. It captur
     Create a .env file in this directory to store your network configuration (URL to connect with the device that runs the model):
     
     ```text
-    MODEL_URL=http://192.168.1.XX:8001
+    MODEL_URL=http://192.168.X.X:8001
     ```
 
 3. **Installation**

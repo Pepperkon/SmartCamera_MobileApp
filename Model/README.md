@@ -9,9 +9,10 @@ This module serves as the intelligence layer of the SmartCam system. It is respo
     - **Python 3.13+**
     - **uv** (Modern Python package manager - [Install uv](https://github.com/astral-sh/uv))
     - **C++ Compiler**: Required to compile the dlib library (e.g., build-essential on Linux or Visual Studio Build Tools on Windows)
-    - **CMake**: Required for the face_recognition installation.
+    - **CMake**: Required for the face_recognition installation
 
 2. **System Dependencies**
+    
     Before installing Python packages, ensure your system has the necessary build tools:
     - **Ubuntu/Raspberry Pi OS**:
         ```bash
@@ -27,7 +28,7 @@ This module serves as the intelligence layer of the SmartCam system. It is respo
     Create a .env file in this directory to store your network configuration (URL to connect with the device that runs the server):
     
     ```text
-    SERVER_URL=http://192.168.1.XX:8000
+    SERVER_URL=http://192.168.X.X:8000
     ```
 
 4. **Installation**

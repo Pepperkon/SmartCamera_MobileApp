@@ -11,6 +11,12 @@ Mobile application designed for an intelligent monitoring system
 
 ---
 
+## Network & Communication
+- All components (App, Server, Model, Camera) must be connected to **the same local network**.
+- Current communication between modules is handled via the **HTTP** protocol.
+
+---
+
 ## Getting Started
 Each component contains its own **README.md** with specific installation instructions. To start the entire system, follow these steps in order:
 1. Configure and start **Server**
@@ -24,7 +30,7 @@ Each component contains its own **README.md** with specific installation instruc
 Communication between devices is often blocked by system security layers.
 
 ### WSL
-To ensure WSL uses the same IP address as your Windows host, create or edit the file **C:\Users\user\.wslconfig**:
+To ensure WSL uses the same IP address as your Windows host, create or edit the file `C:\Users\user\.wslconfig`:
 ```text
 [wsl2]
 networkingMode=Mirrored
