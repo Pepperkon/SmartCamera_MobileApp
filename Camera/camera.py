@@ -54,6 +54,11 @@ def send_to_model():
 
     os.remove(TEMP_PHOTO)
 
+def execute():
+    if take_photo():
+        send_to_model()
+    return True
+
 if __name__ == "__main__":
     if take_photo():
         send_to_model()
