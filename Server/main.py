@@ -81,6 +81,26 @@ async def get_users(session: Session = Depends(get_session)):
     results = session.exec(statement).all()
     return results
 
+def rematch_alerts(new_user: User, face_encoding: List[float], unrecognized_alerts: List[Alert], session: Session):
+    data = {
+        "user_id": new_user.id,
+        "embedding": face_encoding,
+        "unrecognized_alerts": [{"id": a.id, "embedding": a.embedding} for a in unrecognized_alerts]
+    }
+    try:
+        response = requests.post(f"{MODEL_URL}/rematch", json=data, timeout=10)
+        matched_ids = response.json().get("matched_ids", [])
+        for alert_id in matched_ids:
+            alert_to_update = session.get(Alert, alert_id)
+            if alert_to_update:
+                alert_to_update.recognised_user_id = new_user.id
+                alert_to_update.title = f"Detected: {new_user.name}"
+                alert_to_update.isNew = True
+                session.add(alert_to_update)
+        session.commit()
+    except Exception as e:
+        print(f"Rematch failed: {e}")
+
 # Creating a new user
 @app.post("/users")
 async def create_user(name: str = Form(...), file: UploadFile = File(...), session: Session = Depends(get_session)):
@@ -104,6 +124,11 @@ async def create_user(name: str = Form(...), file: UploadFile = File(...), sessi
     session.refresh(new_user)
 
     await add_user_image_logic(new_user.id, file, face_encodings[0], session)
+    statement = select(Alert).where(Alert.recognised_user_id == None, Alert.embedding != None)
+    unrecognized_alerts = session.exec(statement).all()
+
+    if unrecognized_alerts:
+        rematch_alerts(new_user, face_encodings[0], unrecognized_alerts, session)
 
     statement = select(User).where(User.id == new_user.id).options(
         selectinload(User.images), selectinload(User.alerts)
@@ -206,7 +231,8 @@ async def add_alert(item: AlertRead, session: Session = Depends(get_session)):
         time=item.time,
         date=item.date,
         image=item.image,   # TODO - might need some changes
-        recognised_user_id=item.recognised_user_id
+        recognised_user_id=item.recognised_user_id,
+        embedding=item.embedding
     )
 
     session.add(new_alert)
