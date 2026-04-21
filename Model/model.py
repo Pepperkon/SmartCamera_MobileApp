@@ -38,7 +38,25 @@ def identify(known_encodes, image):
         else:
             indexes.append(None)
 
-    return indexes, locations
+    return indexes, locations, unknown_encodings
+
+# Checking faces of old alerts after adding a new user
+@app.post("/rematch")
+async def rematch_unknown_faces(data: dict):
+    user_id = data["user_id"]
+    embedding = np.array(data["embedding"])
+    alerts = data["unrecognized_alerts"]
+
+    if not alerts:
+        return {"status": "No alerts to process"}
+
+    alerts_encodings = [np.array(alert["embedding"]) for alert in alerts]
+
+    distances = face_recognition.face_distance(alerts_encodings, embedding)
+    indices = np.where(distances < TOLERANCE)[0]
+    matched_ids = [alerts[index]["id"] for index in indices]
+
+    return {"matched_ids": matched_ids}
 
 # Endpoint for Server to get an image's encoding
 @app.post("/encode")
@@ -62,7 +80,7 @@ async def recognize_face(file: UploadFile):
 
     known_encodes = [np.array(f["embedding"]) for f in known_faces]
 
-    indexes, locations = identify(known_encodes, image)
+    indexes, locations, unknown_encodings = identify(known_encodes, image)
 
     now = datetime.now()
     time_str = now.strftime("%H:%M:%S")
@@ -80,7 +98,8 @@ async def recognize_face(file: UploadFile):
             "date": date_str,
             "image": image_name,
             "isNew": True,
-            "recognised_user_id": None
+            "recognised_user_id": None,
+            "embedding": None
         })
         return {"status": "processed", "result": "no_faces"}
 
@@ -115,7 +134,8 @@ async def recognize_face(file: UploadFile):
             "date": date_str,
             "image": image_name,
             "isNew": True,
-            "recognised_user_id": user_id
+            "recognised_user_id": user_id,
+            "embedding": unknown_encodings[i].tolist()
         })
 
     return {"status": "success"}

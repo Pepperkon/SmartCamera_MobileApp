@@ -18,6 +18,7 @@ class AlertRead(SQLModel):
     image: str
     isNew: bool
     recognised_user_id: Optional[int]
+    embedding: Optional[List[float]]
 
 class FaceTemplateRead(SQLModel):
     id: int
@@ -39,6 +40,7 @@ class Alert(SQLModel, table=True):
     isNew: bool = Field(default=True)
     recognised_user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     user: Optional["User"] = Relationship(back_populates="alerts")
+    embedding: Optional[List[float]] = Field(sa_column=Column(JSON))
 
 class FaceTemplate(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
