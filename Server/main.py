@@ -10,6 +10,9 @@ from typing import List
 from database import *
 from sqlalchemy.orm import selectinload
 import requests
+import asyncio
+from datetime import timedelta, datetime
+from contextlib import asynccontextmanager
 
 load_dotenv()
 MODEL_URL = os.environ.get("MODEL_URL")
@@ -17,7 +20,38 @@ MODEL_URL = os.environ.get("MODEL_URL")
 if not MODEL_URL:
     raise RuntimeError("MODEL_URL not found, check README for instructions")
 
-app = FastAPI()
+async def cleanup_alerts(interval_seconds: int, max_age_hours: int):
+    while True:
+        threshold = datetime.now() - timedelta(hours=max_age_hours)
+        with Session(engine) as session:
+            old_alerts = session.exec(select(Alert).where(Alert.created_at < threshold)).all()
+            for old_alert in old_alerts:
+                image_path = f"data/images/captured/{old_alert.image}"
+                if os.path.isfile(image_path):
+                    try:
+                        os.remove(image_path)
+                    except Exception as e:
+                        print(f"Could not delete file {image_path}: {e}")
+            session.exec(delete(Alert).where(Alert.created_at < threshold))
+            session.commit()
+            print(f"Deleted {len(old_alerts)} alerts")
+        await asyncio.sleep(interval_seconds)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: creating sql engine and all of the directories
+    SQLModel.metadata.create_all(engine)
+    os.makedirs("data/images/users", exist_ok=True)
+    os.makedirs("data/images/captured", exist_ok=True)
+    task = asyncio.create_task(cleanup_alerts(interval_seconds=60, max_age_hours=1))
+
+    # Starting the application
+    yield
+
+    # Shutdown of the application
+    task.cancel()
+
+app = FastAPI(lifespan=lifespan)
 
 app.mount("/data/images", StaticFiles(directory="data/images"), name="images")
 
@@ -38,6 +72,25 @@ async def get_encoding_from_model(file: UploadFile):
         print(f"Error while connecting to the model: {e}")
         return None
 
+def rematch_alerts(new_user: User, face_encoding: List[float], unrecognized_alerts: List[Alert], session: Session):
+    data = {
+        "user_id": new_user.id,
+        "embedding": face_encoding,
+        "unrecognized_alerts": [{"id": a.id, "embedding": a.embedding} for a in unrecognized_alerts]
+    }
+    try:
+        response = requests.post(f"{MODEL_URL}/rematch", json=data, timeout=10)
+        matched_ids = response.json().get("matched_ids", [])
+        for alert_id in matched_ids:
+            alert_to_update = session.get(Alert, alert_id)
+            if alert_to_update:
+                alert_to_update.recognised_user_id = new_user.id
+                alert_to_update.title = f"Detected: {new_user.name}"
+                alert_to_update.isNew = True
+                session.add(alert_to_update)
+        session.commit()
+    except Exception as e:
+        print(f"Rematch failed: {e}")
 
 async def add_user_image_logic(user_id: int, file: UploadFile, face_encoding: list[float], session: Session):
     new_template = FaceTemplate(filepath="pending", user_id=user_id, embedding=face_encoding)
@@ -60,12 +113,6 @@ async def add_user_image_logic(user_id: int, file: UploadFile, face_encoding: li
 
     return new_template
 
-@app.on_event("startup")
-def on_startup():
-    SQLModel.metadata.create_all(engine)
-    os.makedirs("data/images/users", exist_ok=True)
-    os.makedirs("data/images/captured", exist_ok=True)
-
 # Making it available for the model to get the embeddings of known users
 @app.get("/templates")
 async def get_templates(session: Session = Depends(get_session)):
@@ -74,32 +121,13 @@ async def get_templates(session: Session = Depends(get_session)):
     return [{"user_id": f.user_id, "embedding": f.embedding} for f in results]
 
 # Displaying users in the mobile app
+
 @app.get("/users", response_model=List[UserRead])
 async def get_users(session: Session = Depends(get_session)):
     """Zwraca listę wszystkich użytkowników."""
     statement = select(User).options(selectinload(User.images), selectinload(User.alerts))
     results = session.exec(statement).all()
     return results
-
-def rematch_alerts(new_user: User, face_encoding: List[float], unrecognized_alerts: List[Alert], session: Session):
-    data = {
-        "user_id": new_user.id,
-        "embedding": face_encoding,
-        "unrecognized_alerts": [{"id": a.id, "embedding": a.embedding} for a in unrecognized_alerts]
-    }
-    try:
-        response = requests.post(f"{MODEL_URL}/rematch", json=data, timeout=10)
-        matched_ids = response.json().get("matched_ids", [])
-        for alert_id in matched_ids:
-            alert_to_update = session.get(Alert, alert_id)
-            if alert_to_update:
-                alert_to_update.recognised_user_id = new_user.id
-                alert_to_update.title = f"Detected: {new_user.name}"
-                alert_to_update.isNew = True
-                session.add(alert_to_update)
-        session.commit()
-    except Exception as e:
-        print(f"Rematch failed: {e}")
 
 # Creating a new user
 @app.post("/users")
