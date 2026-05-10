@@ -2,14 +2,14 @@ import os
 import shutil
 import time
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List
 from database import *
 from sqlalchemy.orm import selectinload
-import requests
+import httpx
 import asyncio
 from datetime import timedelta, datetime
 from contextlib import asynccontextmanager
@@ -45,11 +45,15 @@ async def lifespan(app: FastAPI):
     os.makedirs("data/images/captured", exist_ok=True)
     task = asyncio.create_task(cleanup_alerts(interval_seconds=60, max_age_hours=1))
 
+    # Creating AsyncClient for connection pooling
+    app.state.client = httpx.AsyncClient()
+
     # Starting the application
     yield
 
     # Shutdown of the application
     task.cancel()
+    await app.state.client.aclose()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -62,24 +66,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-async def get_encoding_from_model(file: UploadFile):
+def get_client(request: Request) -> httpx.AsyncClient:
+    return request.app.state.client
+
+async def get_encoding_from_model(client: httpx.AsyncClient, file: UploadFile):
     try:
         files = {"file": (file.filename, await file.read(), file.content_type)}
-        response = requests.post(f"{MODEL_URL}/encode", files=files)
+        response = await client.post(f"{MODEL_URL}/encode", files=files)
         await file.seek(0)
         return response.json().get("encodings")
     except Exception as e:
         print(f"Error while connecting to the model: {e}")
         return None
 
-def rematch_alerts(new_user: User, face_encoding: List[float], unrecognized_alerts: List[Alert], session: Session):
+async def rematch_alerts(client: httpx.AsyncClient, new_user: User, face_encoding: List[float], unrecognized_alerts: List[Alert], session: Session):
     data = {
         "user_id": new_user.id,
         "embedding": face_encoding,
         "unrecognized_alerts": [{"id": a.id, "embedding": a.embedding} for a in unrecognized_alerts]
     }
     try:
-        response = requests.post(f"{MODEL_URL}/rematch", json=data, timeout=10)
+        response = await client.post(f"{MODEL_URL}/rematch", json=data, timeout=10)
         matched_ids = response.json().get("matched_ids", [])
         for alert_id in matched_ids:
             alert_to_update = session.get(Alert, alert_id)
@@ -131,8 +138,13 @@ async def get_users(session: Session = Depends(get_session)):
 
 # Creating a new user
 @app.post("/users")
-async def create_user(name: str = Form(...), file: UploadFile = File(...), session: Session = Depends(get_session)):
-    face_encodings = await get_encoding_from_model(file)
+async def create_user(
+    name: str = Form(...),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    client: httpx.AsyncClient = Depends(get_client)
+):
+    face_encodings = await get_encoding_from_model(client, file)
 
     if face_encodings is None:
         raise HTTPException(
@@ -156,7 +168,7 @@ async def create_user(name: str = Form(...), file: UploadFile = File(...), sessi
     unrecognized_alerts = session.exec(statement).all()
 
     if unrecognized_alerts:
-        rematch_alerts(new_user, face_encodings[0], unrecognized_alerts, session)
+        await rematch_alerts(client, new_user, face_encodings[0], unrecognized_alerts, session)
 
     statement = select(User).where(User.id == new_user.id).options(
         selectinload(User.images), selectinload(User.alerts)
@@ -195,9 +207,10 @@ async def delete_user(user_id: int, session: Session = Depends(get_session)):
 async def add_user_image(
     user_id: int,
     file: UploadFile = File(...),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    client: httpx.AsyncClient = Depends(get_client)
 ):
-    face_encodings = await get_encoding_from_model(file)
+    face_encodings = await get_encoding_from_model(client, file)
 
     if len(face_encodings) == 0:
         raise HTTPException(status_code=404, detail="No face detected")
