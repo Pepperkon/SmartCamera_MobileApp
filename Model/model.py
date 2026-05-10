@@ -1,16 +1,16 @@
-from fastapi import FastAPI, Depends, UploadFile, File
+from fastapi import FastAPI, Depends, UploadFile, File, Request
 import os
 import io
 import shutil
 import numpy as np
-import requests
+import httpx
 import uvicorn
 from datetime import datetime
 import sys
 from PIL import Image, ImageDraw
 import face_recognition
 from dotenv import load_dotenv
-
+from contextlib import asynccontextmanager
 
 TOLERANCE = 0.50
 
@@ -20,7 +20,19 @@ SERVER_URL = os.environ.get("SERVER_URL")
 if not SERVER_URL:
     raise RuntimeError("SERVER_URL not found, check README for instructions")
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Creating AsyncClient for connection pooling
+    app.state.client = httpx.AsyncClient(base_url=SERVER_URL)
+    # Starting the application
+    yield
+    # Shutdown of the application
+    await app.state.client.aclose()
+
+app = FastAPI(lifespan=lifespan)
+
+def get_client(request: Request) -> httpx.AsyncClient:
+    return request.app.state.client
 
 def identify(known_encodes, image):
     locations = face_recognition.face_locations(image)
@@ -68,12 +80,12 @@ async def encode_image(file: UploadFile):
 
 # Endpoint where Camera uploads the taken photo
 @app.post("/recognize")
-async def recognize_face(file: UploadFile):
+async def recognize_face(file: UploadFile, client: httpx.AsyncClient = Depends(get_client)):
     contents = await file.read()
     image = face_recognition.load_image_file(io.BytesIO(contents))
 
     try:
-        response = requests.get(f"{SERVER_URL}/templates")
+        response = await client.get("/templates")
         known_faces = response.json()
     except Exception as e:
         return {"status": "error", "message": f"Connection error: {e}"}
@@ -91,8 +103,8 @@ async def recognize_face(file: UploadFile):
         await file.seek(0)
         image_name = f"empty_{time_stamp}.jpg"
         img_json = {"file": (image_name, await file.read(), "image/jpeg")}
-        requests.post(f"{SERVER_URL}/upload-captured", files=img_json)
-        requests.post(f"{SERVER_URL}/alerts", json={
+        await client.post("/upload-captured", files=img_json)
+        await client.post("/alerts", json={
             "title": "No face detected",
             "time": time_str,
             "date": date_str,
@@ -126,9 +138,9 @@ async def recognize_face(file: UploadFile):
         im.save(img_bytes, format='JPEG')
         img_bytes.seek(0)
         files = {"file": (image_name, img_bytes, "image/jpeg")}
-        requests.post(f"{SERVER_URL}/upload-captured", files=files)
+        await client.post("/upload-captured", files=files)
 
-        requests.post(f"{SERVER_URL}/alerts", json={
+        await client.post("/alerts", json={
             "title": title,
             "time": time_str,
             "date": date_str,
