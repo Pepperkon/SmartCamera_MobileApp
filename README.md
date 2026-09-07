@@ -34,7 +34,7 @@ Run these commands from the **root directory** of the repository:
 
 ```bash
 # 1. Sync the root Python environment
-uv sync --all-packages
+uv sync
 
 # 2. Install pre-commit Git hooks
 uv run pre-commit install

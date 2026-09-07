@@ -15,6 +15,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     UploadFile,
     WebSocket,
@@ -265,11 +266,22 @@ async def get_faces_templates(session: Session = Depends(get_session)):
 
 # Displaying users in the mobile app
 @app.get("/users", response_model=list[UserRead])
-async def get_users(session: Session = Depends(get_session)):
+async def get_users(
+    is_temporary: bool = False,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+):
     """Zwraca listę wszystkich użytkowników."""
-    statement = select(User).options(
-        selectinload(User.images),  # type: ignore
-        selectinload(User.alerts),  # type: ignore
+    statement = (
+        select(User)
+        .options(
+            selectinload(User.images),  # type: ignore
+        )
+        .where(User.is_temporary == is_temporary)
+        .order_by(col(User.name))
+        .offset(offset)
+        .limit(limit)
     )
     results = session.exec(statement).all()
     return results
@@ -427,8 +439,14 @@ async def get_user(user_id: int, session: Session = Depends(get_session)):
 
 # Returns the list of all alerts
 @app.get("/alerts", response_model=list[AlertRead])
-async def get_alerts(session: Session = Depends(get_session)):
-    return session.exec(select(Alert).order_by(col(Alert.id).desc())).all()
+async def get_alerts(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+):
+    return session.exec(
+        select(Alert).order_by(col(Alert.id).desc()).offset(offset).limit(limit)
+    ).all()
 
 
 @app.websocket("/ws/alerts")

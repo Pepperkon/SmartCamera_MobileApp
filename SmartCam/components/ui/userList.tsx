@@ -5,10 +5,10 @@ import {
   getUsersFromCache,
   saveUsersToCache,
 } from "@/services/userService";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet } from "react-native";
 import UserEntry from "./userEntry";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router/react-navigation";
 
 function UserList() {
   const [users, setUsers] = useState<User[]>([]);
