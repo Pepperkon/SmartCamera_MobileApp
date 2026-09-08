@@ -124,12 +124,16 @@ wheels = [
 name = "smartcam-monorepo"
 version = "0.1.0"
 source = { virtual = "." }
-dependencies = [
+
+[package.dev-dependencies]
+dev = [
     { name = "pre-commit" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pre-commit" }]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pre-commit" }]
 
 [[package]]
 name = "virtualenv"

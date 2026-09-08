@@ -2,9 +2,7 @@
 name = "smartcam-monorepo"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = [
-    "pre-commit",
-]
+dependencies = []
 
 [tool.ruff]
 target-version = "py313"
@@ -13,3 +11,8 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "BLE", "DTZ"]
 ignore = ["B008", "DTZ005", "E501"]
+
+[dependency-groups]
+dev = [
+    "pre-commit",
+]
