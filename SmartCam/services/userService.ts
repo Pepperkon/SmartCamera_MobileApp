@@ -1,3 +1,4 @@
+import * as FileSystem from "expo-file-system/legacy";
 import { User } from "@/constants/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "@/constants/api";
@@ -35,50 +36,36 @@ export const getUsersFromCache = async (): Promise<User[] | null> => {
 };
 
 export const addUser = async (name: string, imageUri: string) => {
-  const formData = new FormData();
-
-  formData.append("name", name);
-
-  const filename = imageUri.split("/").pop() || "photo.jpg";
-  const match = /\.(\w+)$/.exec(filename);
-  const type = match ? `image/${match[1]}` : `image`;
-
-  formData.append("file", {
-    uri: imageUri,
-    name: filename,
-    type: type,
-  } as any);
-
-  const response = await fetch(`${API_URL}/users`, {
-    method: "POST",
-    body: formData,
-    headers: {
-      "Content-Type": "multipart/form-data",
+  const uploadResult = await FileSystem.uploadAsync(`${API_URL}/users`, imageUri, {
+    fieldName: "file",
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    parameters: {
+      name: name,
     },
   });
 
-  return await response;
+  return {
+    ok: uploadResult.status >= 200 && uploadResult.status < 300,
+    status: uploadResult.status,
+    json: async () => JSON.parse(uploadResult.body),
+    text: async () => uploadResult.body,
+  };
 };
 
 export const addUserImage = async (id: string, imageUri: string) => {
-  const formData = new FormData();
-
-  const filename = imageUri.split("/").pop() || "photo.jpg";
-  const match = /\.(\w+)$/.exec(filename);
-  const type = match ? `image/${match[1]}` : `image`;
-
-  formData.append("file", {
-    uri: imageUri,
-    name: filename,
-    type: type,
-  } as any);
-
-  const response = await fetch(`${API_URL}/users/${id}/images`, {
-    method: "POST",
-    body: formData,
+  const uploadResult = await FileSystem.uploadAsync(`${API_URL}/users/${id}/images`, imageUri, {
+    fieldName: "file",
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
   });
 
-  return await response;
+  return {
+    ok: uploadResult.status >= 200 && uploadResult.status < 300,
+    status: uploadResult.status,
+    json: async () => JSON.parse(uploadResult.body),
+    text: async () => uploadResult.body,
+  };
 };
 
 export const deleteUser = async (id: string) => {

@@ -304,10 +304,10 @@ async def create_user(
         )
 
     if len(face_encodings) == 0:
-        raise HTTPException(status_code=404, detail="NO_FACE")
+        raise HTTPException(status_code=422, detail="NO_FACE")
 
     if len(face_encodings) > 1:
-        raise HTTPException(status_code=404, detail="MULTIPLE_FACES")
+        raise HTTPException(status_code=422, detail="MULTIPLE_FACES")
 
     new_user = User(name=name, is_temporary=False)
     session.add(new_user)
@@ -396,10 +396,10 @@ async def add_user_image(
         )
 
     if len(face_encodings) == 0:
-        raise HTTPException(status_code=404, detail="No face detected")
+        raise HTTPException(status_code=422, detail="NO_FACE")
 
     if len(face_encodings) > 1:
-        raise HTTPException(status_code=404, detail="More than 1 face detected")
+        raise HTTPException(status_code=422, detail="MULTIPLE_FACES")
 
     user = session.get(User, user_id)
     if not user:
