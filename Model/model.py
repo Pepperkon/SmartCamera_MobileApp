@@ -56,11 +56,12 @@ def _process_identification(contents: bytes, known_faces: list) -> list:
     results = []
     for i, unknown_encoding in enumerate(unknown_encodings):
         user_id = None
-
+        distance = None
         if known_faces:
             distances = face_recognition.face_distance(known_encodes, unknown_encoding)
             if len(distances) > 0:
                 best_match_index = np.argmin(distances)
+                distance = distances[best_match_index]
                 if distances[best_match_index] < TOLERANCE:
                     user_id = known_faces[best_match_index]["user_id"]
 
@@ -69,6 +70,7 @@ def _process_identification(contents: bytes, known_faces: list) -> list:
                 "user_id": user_id,
                 "location": locations[i],
                 "encoding": unknown_encoding.tolist(),
+                "distance": distance,
             }
         )
 

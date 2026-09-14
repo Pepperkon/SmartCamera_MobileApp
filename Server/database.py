@@ -22,6 +22,7 @@ class AlertRead(SQLModel):
     isNew: bool
     recognised_user_id: int | None
     embedding: list[float] | None
+    confidence: float = Field(default=0.0)
 
 
 class FaceTemplateRead(SQLModel):
@@ -50,6 +51,7 @@ class Alert(SQLModel, table=True):
     user: Optional["User"] = Relationship(back_populates="alerts")
     embedding: list[float] | None = Field(sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=lambda: datetime.now())
+    confidence: float = Field(default=0.0)
 
 
 class FaceTemplate(SQLModel, table=True):

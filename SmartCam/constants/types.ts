@@ -9,6 +9,7 @@ export interface AlertItem {
   date?: string;
   isNew: boolean;
   captured_user_id?: number;
+  confidence: number;
 }
 
 export interface UserImage {

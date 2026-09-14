@@ -175,6 +175,7 @@ async def add_alert(data: dict, session: Session):
         isNew=data["isNew"],
         recognised_user_id=data["recognised_user_id"],
         embedding=data["embedding"],
+        confidence=data["confidence"],
     )
 
     session.add(new_alert)
@@ -657,6 +658,13 @@ async def recognize_face(
         img_bytes.seek(0)
 
         save_image_to_disk(image_name, img_bytes)
+
+        distance = res.get("distance")
+        if distance is not None:
+            confidence = max(0.0, 1 - distance) * 100
+        else:
+            confidence = 0.0
+
         await add_alert(
             {
                 "title": title,
@@ -666,6 +674,7 @@ async def recognize_face(
                 "isNew": True,
                 "recognised_user_id": user_id,
                 "embedding": res["encoding"],
+                "confidence": confidence,
             },
             session,
         )

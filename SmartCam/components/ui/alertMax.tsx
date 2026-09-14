@@ -28,6 +28,12 @@ function AlertMax() {
     }
   };
 
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 80) return "#4ade80"; // green - high confidence
+    if (confidence >= 50) return "#facc15"; // yellow - medium confidence
+    return "#f87171"; // red - low confidence
+  };
+
   useEffect(() => {
     const loadAlert = async () => {
       const cachedAlerts = await getAlertsFromCache();
@@ -66,13 +72,20 @@ function AlertMax() {
       ? { uri: filepath }
       : { uri: "https://ui-avatars.com/api/?name=" + alert.title };
 
+  const [prefix, name] = alert.title ? alert.title.split(": ") : ["", ""];
+
   return (
     <View style={styles.container}>
-      <Text style={GlobalStyles.text_primary}>{alert.title}</Text>
+      <Text style={GlobalStyles.text_primary}>{prefix}</Text>
+      <Text style={GlobalStyles.text_primary}>{name}</Text>
       <View style={styles.row_container}>
         <Text style={GlobalStyles.text_secondary}>{alert.time}</Text>
         <Text style={GlobalStyles.text_secondary}>{alert.date}</Text>
       </View>
+
+      <Text style={[GlobalStyles.text_secondary, { color: getConfidenceColor(alert.confidence), marginTop: 5 }]}>
+          Confidence: {Math.round(alert.confidence)}%
+      </Text>
 
       <Image source={imageSource} style={styles.image} />
 
