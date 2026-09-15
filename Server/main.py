@@ -5,11 +5,13 @@ import shutil
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from typing import Any, BinaryIO
 
 import httpx
 from database import Alert, AlertRead, FaceTemplate, User, UserRead, engine, get_session
 from dotenv import load_dotenv
 from fastapi import (
+    BackgroundTasks,
     Depends,
     FastAPI,
     File,
@@ -34,16 +36,16 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
         self.active_connections.append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
+    def disconnect(self, websocket: WebSocket) -> None:
         self.active_connections.remove(websocket)
 
     # Sends data to all active clients.
     # Automatically cleans up zombie connections to prevent crashes
-    async def broadcast(self, message: dict):
+    async def broadcast(self, message: dict) -> None:
         dead_connections = []
         for connection in self.active_connections:
             try:
@@ -75,7 +77,7 @@ async def mark_recognised(session_id: str, user_id: int) -> bool:
     return added == 1
 
 
-async def cleanup_alerts(interval_seconds: int, max_age_hours: int):
+async def cleanup_alerts(interval_seconds: int, max_age_hours: int) -> None:
     while True:
         threshold = datetime.now() - timedelta(hours=max_age_hours)
         with Session(engine) as session:
@@ -152,7 +154,7 @@ def get_client(request: Request) -> httpx.AsyncClient:
 
 
 # Uploading a captured image
-def save_image_to_disk(filename: str, img_data):
+def save_image_to_disk(filename: str, img_data: bytes | io.BytesIO | BinaryIO) -> None:
     filepath = f"data/images/captured/{filename}"
     with open(filepath, "wb") as f:
         if isinstance(img_data, bytes):
@@ -162,7 +164,7 @@ def save_image_to_disk(filename: str, img_data):
 
 
 # Creating an alert
-async def add_alert(data: dict, session: Session):
+async def add_alert(data: dict[str, Any], session: Session) -> Alert:
     print(
         f"[ALERT] Creating database alert: '{data['title']}' for user ID: {data['recognised_user_id']}"
     )
@@ -193,7 +195,9 @@ async def add_alert(data: dict, session: Session):
     return new_alert
 
 
-async def get_encoding_from_model(client: httpx.AsyncClient, file: UploadFile):
+async def get_encoding_from_model(
+    client: httpx.AsyncClient, file: UploadFile
+) -> list[list[float]] | None:
     try:
         files = {"file": (file.filename, await file.read(), file.content_type)}
         response = await client.post(f"{MODEL_URL}/encode", files=files)
@@ -209,7 +213,7 @@ async def add_user_image_logic(
     file: UploadFile | io.BytesIO,
     face_encoding: list[float],
     session: Session,
-):
+) -> FaceTemplate:
     new_template = FaceTemplate(filepath="pending", user_id=user_id, embedding=face_encoding)
     session.add(new_template)
     session.commit()
@@ -237,7 +241,7 @@ async def add_user_image_logic(
     return new_template
 
 
-async def notify_model_sync(client: httpx.AsyncClient | None = None):
+async def notify_model_sync(client: httpx.AsyncClient | None = None) -> None:
     try:
         if client and not isinstance(client, httpx.AsyncClient):
             client = None
@@ -253,15 +257,153 @@ async def notify_model_sync(client: httpx.AsyncClient | None = None):
         print(f"Error while connecting to the model: {e}")
 
 
+def _process_file_writing(contents: bytes, coordinates: tuple[int, int, int, int]) -> io.BytesIO:
+    # Scale properly the image for it to show only the wanted face
+    base_image = Image.open(io.BytesIO(contents))
+    cropped_im = base_image.crop(coordinates)
+    img_bytes = io.BytesIO()
+    cropped_im.save(img_bytes, format="JPEG")
+    img_bytes.seek(0)
+    return img_bytes
+
+
+async def process_image_pipeline(
+    contents: bytes, session_id: str, client: httpx.AsyncClient
+) -> None:
+    with Session(engine) as session:
+        response = await client.post(
+            f"{MODEL_URL}/identify",
+            content=contents,
+        )
+        response.raise_for_status()
+
+        results = response.json().get("results", [])
+        print(f"[RECOGNIZE] Model returned {len(results)} recognized faces.")
+
+        now = datetime.now()
+        time_str = now.strftime("%H:%M:%S")
+        date_str = now.strftime("%d.%m.%Y")
+        time_stamp = now.strftime("%d.%m.%Y_%H-%M-%S")
+
+        if not results:
+            print("[RECOGNIZE] Decision: No faces detected. Saving empty image and exiting.")
+            image_name = f"empty_{time_stamp}.jpg"
+            await asyncio.to_thread(save_image_to_disk, image_name, contents)
+            return
+
+        new_template_added = False
+
+        for i, res in enumerate(results):
+            user_id = res["user_id"]
+            print(f"[RECOGNIZE] Processing face {i + 1}/{len(results)}. Returned ID: {user_id}")
+
+            top, right, bottom, left = res["location"]
+
+            # When an uknown face is detected a new user is created
+            # This user is untrusted and temporary
+            # This means that when all their alerts are deleted the user is also deleted
+            if user_id is None:
+                print("[RECOGNIZE] Decision: Face is unknown. Creating a temporary user.")
+                new_user = User(name="Stranger")
+                session.add(new_user)
+                session.commit()
+                session.refresh(new_user)
+                new_user.name += f"_{new_user.id}"
+                session.commit()
+                assert new_user.id is not None, "Fresh user_id cannot be None"
+                user_id = new_user.id
+                print(f"[RECOGNIZE] Success: Created new user with ID: {user_id}")
+
+            print(
+                f"[RECOGNIZE] Checking for session duplication [{session_id}] for ID: {user_id}..."
+            )
+            if not await mark_recognised(session_id, user_id):
+                print(
+                    f"[RECOGNIZE] Rejected: User {user_id} already recognized in this session. Skipping."
+                )
+                continue
+
+            print(f"[RECOGNIZE] Checking global Redis cooldown for ID: {user_id}...")
+            cooldown_key = f"cooldown:user:{user_id}"
+            cooldown_created = await redis.set(cooldown_key, "active", nx=True, ex=300)
+
+            if not cooldown_created:
+                print(
+                    f"[RECOGNIZE] Rejected: Active cooldown (5 min) for user {user_id}. Skipping."
+                )
+                continue
+
+            user = session.get(User, user_id)
+
+            if not user:
+                print(
+                    f"[RECOGNIZE] Error: User {user_id} does not exist in the database! Skipping."
+                )
+                continue
+            print(
+                f"[RECOGNIZE] Decision: User {user.name} qualified for an alert. Trusted status: {user.is_trusted}"
+            )
+
+            if not user.is_temporary:
+                title = f"Recognized: {user.name}"
+            else:
+                title = f"Unknown: {user.name}"
+                img_bytes = await asyncio.to_thread(
+                    _process_file_writing, contents, (left, top, right, bottom)
+                )
+                # For temporary users add many faces for reference
+                await add_user_image_logic(user_id, img_bytes, res["encoding"], session)
+                new_template_added = True
+
+            status = f"user_{user_id}"
+            image_name = f"{status}_{time_stamp}_{i}.jpg"
+
+            # TODO: move this code to the app
+            base_image = Image.open(io.BytesIO(contents))
+            im = base_image.copy()
+            d = ImageDraw.Draw(im)
+            d.rectangle([left, top, right, bottom], outline="red", width=3)
+            img_bytes = io.BytesIO()
+            im.save(img_bytes, format="JPEG")
+            img_bytes.seek(0)
+
+            await asyncio.to_thread(save_image_to_disk, image_name, img_bytes)
+
+            distance = res.get("distance")
+            if distance is not None:
+                confidence = max(0.0, 1 - distance) * 100
+            else:
+                confidence = 0.0
+
+            await add_alert(
+                {
+                    "title": title,
+                    "time": time_str,
+                    "date": date_str,
+                    "image": image_name,
+                    "isNew": True,
+                    "recognised_user_id": user_id,
+                    "embedding": res["encoding"],
+                    "confidence": confidence,
+                },
+                session,
+            )
+
+        if new_template_added:
+            await notify_model_sync(client)
+
+
 # Making it available for the model to get the embeddings of known users
-def get_templates(session: Session):
+def get_templates(session: Session) -> list[dict[str, Any]]:
     statement = select(FaceTemplate)
     results = session.exec(statement).all()
     return [{"user_id": f.user_id, "embedding": f.embedding} for f in results]
 
 
 @app.get("/faces/templates")
-async def get_faces_templates(session: Session = Depends(get_session)):
+async def get_faces_templates(
+    session: Session = Depends(get_session),
+) -> list[dict[str, Any]]:
     return get_templates(session)
 
 
@@ -295,7 +437,7 @@ async def create_user(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
     client: httpx.AsyncClient = Depends(get_client),
-):
+) -> User:
     face_encodings = await get_encoding_from_model(client, file)
 
     if face_encodings is None:
@@ -328,6 +470,7 @@ async def create_user(
         )
     )
     full_user = session.exec(statement).first()
+    assert full_user is not None, "Created user not found in database"
 
     await notify_model_sync(client)
 
@@ -336,7 +479,7 @@ async def create_user(
 
 # Deleting a user
 @app.delete("/users/{user_id}")
-async def delete_user(user_id: int, session: Session = Depends(get_session)):
+async def delete_user(user_id: int, session: Session = Depends(get_session)) -> dict[str, Any]:
     statement = (
         select(User)
         .where(User.id == user_id)
@@ -463,7 +606,7 @@ async def websocket_alerts_endpoint(websocket: WebSocket):
 
 # Checking alert's status from New to Read
 @app.post("/alerts/{alert_id}/read")
-async def mark_as_read(alert_id: int, session: Session = Depends(get_session)):
+async def mark_as_read(alert_id: int, session: Session = Depends(get_session)) -> dict[str, str]:
     """Znajduje alert po ID i zmienia isNew na False."""
     alert = session.get(Alert, alert_id)
     if not alert:
@@ -484,7 +627,7 @@ async def mark_as_read(alert_id: int, session: Session = Depends(get_session)):
 @app.delete("/alerts/{alert_id}")
 async def delete_alert(
     alert_id: int, auto_commit: bool = True, session: Session = Depends(get_session)
-):
+) -> dict[str, Any]:
     alert_to_remove = session.get(Alert, alert_id)
 
     if not alert_to_remove:
@@ -516,7 +659,9 @@ async def delete_alert(
 
 # Upgrading a temporary user to a permanent one and updating their old alerts
 @app.patch("/users/{user_id}")
-async def save_temporary_user(user_id: int, name: str, session: Session = Depends(get_session)):
+async def save_temporary_user(
+    user_id: int, name: str, session: Session = Depends(get_session)
+) -> dict[str, str]:
     user = session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -544,7 +689,7 @@ async def save_temporary_user(user_id: int, name: str, session: Session = Depend
 @app.patch("/users/{user_id}/trust")
 async def update_trust_status(
     user_id: int, is_trusted: bool, session: Session = Depends(get_session)
-):
+) -> dict[str, Any]:
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -556,131 +701,16 @@ async def update_trust_status(
 
 @app.post("/recognize")
 async def recognize_face(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     session_id: str = Form(...),
     client: httpx.AsyncClient = Depends(get_client),
-    session: Session = Depends(get_session),
-):
+) -> dict[str, str]:
     print(f"\n[RECOGNIZE] --- New request for session: {session_id} ---")
 
     contents = await file.read()
-    response = await client.post(
-        f"{MODEL_URL}/identify",
-        files={"file": (file.filename, contents, file.content_type)},
-    )
-    response.raise_for_status()
 
-    results = response.json().get("results", [])
-    print(f"[RECOGNIZE] Model returned {len(results)} recognized faces.")
-
-    now = datetime.now()
-    time_str = now.strftime("%H:%M:%S")
-    date_str = now.strftime("%d.%m.%Y")
-    time_stamp = now.strftime("%d.%m.%Y_%H-%M-%S")
-
-    if not results:
-        print("[RECOGNIZE] Decision: No faces detected. Saving empty image and exiting.")
-        image_name = f"empty_{time_stamp}.jpg"
-        save_image_to_disk(image_name, contents)
-        return {"status": "processed", "result": "no_faces"}
-
-    base_image = Image.open(io.BytesIO(contents))
-    new_template_added = False
-
-    for i, res in enumerate(results):
-        user_id = res["user_id"]
-        print(f"[RECOGNIZE] Processing face {i + 1}/{len(results)}. Returned ID: {user_id}")
-
-        top, right, bottom, left = res["location"]
-
-        # When an uknown face is detected a new user is created
-        # This user is untrusted and temporary
-        # This means that when all their alerts are deleted the user is also deleted
-        if user_id is None:
-            print("[RECOGNIZE] Decision: Face is unknown. Creating a temporary user.")
-            new_user = User(name="Stranger")
-            session.add(new_user)
-            session.commit()
-            session.refresh(new_user)
-            new_user.name += f"_{new_user.id}"
-            session.commit()
-            assert new_user.id is not None, "Fresh user_id cannot be None"
-            user_id = new_user.id
-            print(f"[RECOGNIZE] Success: Created new user with ID: {user_id}")
-
-        print(f"[RECOGNIZE] Checking for session duplication [{session_id}] for ID: {user_id}...")
-        if not await mark_recognised(session_id, user_id):
-            print(
-                f"[RECOGNIZE] Rejected: User {user_id} already recognized in this session. Skipping."
-            )
-            continue
-
-        print(f"[RECOGNIZE] Checking global Redis cooldown for ID: {user_id}...")
-        cooldown_key = f"cooldown:user:{user_id}"
-        cooldown_created = await redis.set(cooldown_key, "active", nx=True, ex=300)
-
-        if not cooldown_created:
-            print(f"[RECOGNIZE] Rejected: Active cooldown (5 min) for user {user_id}. Skipping.")
-            continue
-
-        user = session.get(User, user_id)
-
-        if not user:
-            print(f"[RECOGNIZE] Error: User {user_id} does not exist in the database! Skipping.")
-            continue
-        print(
-            f"[RECOGNIZE] Decision: User {user.name} qualified for an alert. Trusted status: {user.is_trusted}"
-        )
-
-        if not user.is_temporary:
-            title = f"Recognized: {user.name}"
-        else:
-            title = f"Unknown: {user.name}"
-            # Scale properly the image for it to show only the wanted face
-            im = base_image.copy()
-            cropped_im = im.crop((left, top, right, bottom))
-            img_bytes = io.BytesIO()
-            cropped_im.save(img_bytes, format="JPEG")
-            img_bytes.seek(0)
-            # For temporary users add many faces for reference
-            await add_user_image_logic(user_id, img_bytes, res["encoding"], session)
-            new_template_added = True
-
-        status = f"user_{user_id}"
-        image_name = f"{status}_{time_stamp}_{i}.jpg"
-
-        im = base_image.copy()
-        d = ImageDraw.Draw(im)
-        d.rectangle([left, top, right, bottom], outline="red", width=3)
-
-        img_bytes = io.BytesIO()
-        im.save(img_bytes, format="JPEG")
-        img_bytes.seek(0)
-
-        save_image_to_disk(image_name, img_bytes)
-
-        distance = res.get("distance")
-        if distance is not None:
-            confidence = max(0.0, 1 - distance) * 100
-        else:
-            confidence = 0.0
-
-        await add_alert(
-            {
-                "title": title,
-                "time": time_str,
-                "date": date_str,
-                "image": image_name,
-                "isNew": True,
-                "recognised_user_id": user_id,
-                "embedding": res["encoding"],
-                "confidence": confidence,
-            },
-            session,
-        )
-
-    if new_template_added:
-        await notify_model_sync(client)
+    background_tasks.add_task(process_image_pipeline, contents, session_id, client)
 
     return {"status": "success"}
 

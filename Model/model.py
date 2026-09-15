@@ -8,7 +8,7 @@ import httpx
 import numpy as np
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 
 TOLERANCE = 0.50
 load_dotenv()
@@ -81,13 +81,13 @@ def _process_identification(contents: bytes, known_faces: list) -> list:
 # Takes all known encodes and an image
 # Returns results for all detected faces
 @app.post("/identify")
-async def identify(request: Request, file: UploadFile = File(...)):
+async def identify(request: Request):
+    contents = await request.body()
     if not request.app.state.is_synced:
         success = await sync_known_faces(request.app)
         if not success:
             raise HTTPException(status_code=503, detail="Synchronization failed")
 
-    contents = await file.read()
     if not contents:
         raise HTTPException(status_code=400, detail="Empty image file received")
     known_faces = request.app.state.known_faces
