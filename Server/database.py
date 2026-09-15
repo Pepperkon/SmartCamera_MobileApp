@@ -23,6 +23,7 @@ class AlertRead(SQLModel):
     recognised_user_id: int | None
     embedding: list[float] | None
     confidence: float = Field(default=0.0)
+    location: list[int] | None
 
 
 class FaceTemplateRead(SQLModel):
@@ -52,6 +53,7 @@ class Alert(SQLModel, table=True):
     embedding: list[float] | None = Field(sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=lambda: datetime.now())
     confidence: float = Field(default=0.0)
+    location: list[int] | None = Field(default=None, sa_column=Column(JSON))
 
 
 class FaceTemplate(SQLModel, table=True):

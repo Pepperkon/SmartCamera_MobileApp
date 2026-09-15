@@ -10,6 +10,7 @@ export interface AlertItem {
   isNew: boolean;
   captured_user_id?: number;
   confidence: number;
+  location?: [number, number, number, number] | null;
 }
 
 export interface UserImage {

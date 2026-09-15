@@ -25,7 +25,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, ImageDraw
+from PIL import Image
 from redis.asyncio import Redis
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, SQLModel, col, delete, select
@@ -178,6 +178,7 @@ async def add_alert(data: dict[str, Any], session: Session) -> Alert:
         recognised_user_id=data["recognised_user_id"],
         embedding=data["embedding"],
         confidence=data["confidence"],
+        location=data["location"],
     )
 
     session.add(new_alert)
@@ -285,6 +286,9 @@ async def process_image_pipeline(
         date_str = now.strftime("%d.%m.%Y")
         time_stamp = now.strftime("%d.%m.%Y_%H-%M-%S")
 
+        image_name = f"{time_stamp}.jpg"
+        image_saved = False
+
         if not results:
             print("[RECOGNIZE] Decision: No faces detected. Saving empty image and exiting.")
             image_name = f"empty_{time_stamp}.jpg"
@@ -355,25 +359,15 @@ async def process_image_pipeline(
                 await add_user_image_logic(user_id, img_bytes, res["encoding"], session)
                 new_template_added = True
 
-            status = f"user_{user_id}"
-            image_name = f"{status}_{time_stamp}_{i}.jpg"
-
-            # TODO: move this code to the app
-            base_image = Image.open(io.BytesIO(contents))
-            im = base_image.copy()
-            d = ImageDraw.Draw(im)
-            d.rectangle([left, top, right, bottom], outline="red", width=3)
-            img_bytes = io.BytesIO()
-            im.save(img_bytes, format="JPEG")
-            img_bytes.seek(0)
-
-            await asyncio.to_thread(save_image_to_disk, image_name, img_bytes)
-
             distance = res.get("distance")
             if distance is not None:
                 confidence = max(0.0, 1 - distance) * 100
             else:
                 confidence = 0.0
+
+            if not image_saved:
+                await asyncio.to_thread(save_image_to_disk, image_name, contents)
+                image_saved = True
 
             await add_alert(
                 {
@@ -385,6 +379,7 @@ async def process_image_pipeline(
                     "recognised_user_id": user_id,
                     "embedding": res["encoding"],
                     "confidence": confidence,
+                    "location": [top, right, bottom, left],
                 },
                 session,
             )
