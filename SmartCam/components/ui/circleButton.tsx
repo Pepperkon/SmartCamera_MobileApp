@@ -1,5 +1,5 @@
 import { COLORS, SPACING } from "@/constants/theme";
-import { Ionicons, AntDesign } from "@expo/vector-icons";
+import { AntDesign } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, StyleSheet } from "react-native";
 

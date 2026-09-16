@@ -115,7 +115,7 @@ export const markAsReadOnServer = async (id: string) => {
     await fetch(`${API_URL}/alerts/${id}/read`, {
       method: "POST",
     });
-  } catch (error) {
+  } catch {
     console.error("Nie udało się zaktualizować statusu na serwerze");
   }
 };

@@ -1,8 +1,6 @@
 import { COLORS } from "@/constants/theme";
-import { GlobalStyles } from "@/styles/GlobalStyles";
 import React from "react";
-import { Text, TextInput, View } from "react-native";
-import { Image, Pressable, StyleSheet } from "react-native";
+import { TextInput, View, StyleSheet } from "react-native";
 import CircleButton from "./circleButton";
 import { useRouter } from "expo-router";
 
