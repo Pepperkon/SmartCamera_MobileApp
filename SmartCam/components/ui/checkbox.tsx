@@ -1,8 +1,7 @@
-import { COLORS, SPACING } from "@/constants/theme";
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text } from "react-native";
 
 interface Props {
   text: string;

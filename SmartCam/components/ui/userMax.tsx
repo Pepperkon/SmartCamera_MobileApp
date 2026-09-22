@@ -7,16 +7,15 @@ import {
   Pressable,
   FlatList,
   Dimensions,
+  StyleSheet
 } from "react-native";
-import React, { useCallback, useEffect, useState } from "react";
-import { StyleSheet } from "react-native";
+import React, { useCallback, useState } from "react";
 import { COLORS, SPACING } from "@/constants/theme";
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
   deleteUser,
   deleteUserFromCache,
-  getUsersFromCache,
 } from "@/services/userService";
 import { User } from "@/constants/types";
 import { API_URL } from "@/constants/api";
