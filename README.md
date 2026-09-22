@@ -13,8 +13,26 @@ Mobile application designed for an intelligent monitoring system
 ---
 
 ## Network & Communication
-- All components (App, Server, Model, Camera) must be connected to **the same local network**.
-- Communication between modules is handled via the **HTTP** protocol (REST API) and **WebSockets** (for real-time UI updates).
+
+The core infrastructure (**Server**, **Model**, **Camera**, **Redis**) is designed to run locally within the same **Home LAN** network for low latency and security.
+
+Communication between services uses standard HTTP REST endpoints and WebSockets for real-time alert dispatching.
+
+---
+
+### Accessing Your SmartCam from Outside (Remote Access)
+
+If you want to monitor your home and receive alerts on your phone while away (e.g., from work or cellular data), the recommended and most secure solution is **[Tailscale](https://tailscale.com/)** (a zero-config WireGuard mesh VPN). This avoids dangerous port forwarding on your home router.
+
+> **Quick Start:** Check out the official [Tailscale in 10 minutes tutorial on YouTube](https://www.youtube.com/watch?v=sPdvyR7bLqI) to see how easy it is to set up a private mesh network.
+
+#### How it works:
+1. Install **Tailscale** on the machine running the **Server** (PC/Raspberry Pi) and on your **Mobile Phone**.
+2. Log into the same Tailscale account on both devices.
+3. Note the Tailscale IP assigned to your server host (e.g., `100.x.y.z`).
+4. Point your mobile application to this Tailscale IP. All backend traffic and WebSocket streams will securely route straight to your home system.
+
+> Detailed steps for running the mobile app with Tailscale are described in the [`SmartCam/README.md`](./SmartCam/README.md).
 
 ---
 

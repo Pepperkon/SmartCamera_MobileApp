@@ -37,7 +37,7 @@ function NewUser() {
 
   const handleSave = async () => {
     if (!name || !image) {
-      Alert.alert("Błąd", "Podaj nazwę i wybierz zdjęcie!");
+      Alert.alert("Error", "Please provide a name and select an image!");
       return;
     }
 
@@ -45,26 +45,39 @@ function NewUser() {
       setLoading(true);
       const res = await addUser(name, image);
       setLoading(false);
-      switch (res.status) {
-        case 200:
-          Alert.alert("Success", "The user has been successfully added.");
-          break;
 
-        case 404:
+      if (res.ok) {
+        Alert.alert("Success", "User has been successfully added.");
+        setName("");
+        setImage(null);
+        router.back();
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      const detail = data?.detail;
+
+      if (res.status === 422 || res.status === 400) {
+        if (detail === "MULTIPLE_FACES" || detail === "More than 1 face detected") {
           Alert.alert(
             "Invalid Photo",
-            "A face must be present in the image to continue.",
+            "Multiple faces detected. Please select a photo with only one person."
           );
-          break;
-
-        default:
-          Alert.alert("Something went wrong", `Error code: ${res.status}`);
+        } else if (detail === "NO_FACE" || detail === "No face detected") {
+          Alert.alert(
+            "Invalid Photo",
+            "No face detected. Please ensure the face is clearly visible."
+          );
+        } else {
+          Alert.alert("Invalid Photo", "Failed to detect face properly.");
+        }
+      } else if (res.status === 503) {
+        Alert.alert("Server Error", "Face recognition model is currently unavailable.");
+      } else {
+        Alert.alert("Error", `Something went wrong. Status code: ${res.status}`);
       }
-      setName("");
-      setImage(null);
-      router.back();
-    } catch (e) {
-      Alert.alert("Network Error", "The server is unreachable.");
+    } catch {
+      Alert.alert("Network Error", "Unable to connect to the server.");
     } finally {
       setLoading(false);
     }

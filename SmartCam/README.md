@@ -1,57 +1,50 @@
-# Welcome to your Expo app 👋
+# SmartCam Mobile Client
+Mobile application built with **React Native** and **Expo**. It serves as the primary user interface for the SmartCam ecosystem, enabling real-time alert monitoring via WebSockets, user registration (with facial biometric templates), and access control management.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+---
 
-## Get started
+## Getting Started
 
-1. Change Server URL
-   
-    In the file **constants/api.ts** change this line so it matches your server's URL:
-    ```ts
-    export const API_URL = "http://192.168.X.X:8000";
-    ````
+1. **Prerequisites**
+    - **Node.js** & **npm**
+    - **Expo Go** app installed on your physical mobile device (Android / iOS)
 
-2. Install dependencies
+2. **Environment Configuration**
 
+    Create a **.env** file inside the **SmartCam/** root directory
+    
+    ```text
+    # Local Network (Home Wi-Fi):
+    EXPO_PUBLIC_SERVER_IP=192.168.X.Y
+    
+    # Remote Access (Tailscale VPN):
+    # EXPO_PUBLIC_SERVER_IP=100.X.Y.Z
+    ```
+
+3. **Installation**
+
+    Install all required project dependencies:
     ```bash
     npm install
     ```
 
-3. Start the app
+4. **Running the Application**
 
-    ```bash
-    npx expo start
-    ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+    - **Option A**: Local Network (Same Wi-Fi)
+      ```bash
+      npx expo start
+      ```
+    - **Option B**: Remote Access via Tailscale
+      - **Windows (PowerShell)**: 
+        ```powershell
+        $env:REACT_NATIVE_PACKAGER_HOSTNAME="100.X.Y.Z"; npx expo start
+        ```
+      - **Windows (CMD)**:
+        ```cmd
+        set REACT_NATIVE_PACKAGER_HOSTNAME=100.X.Y.Z && npx expo start
+        ```
+      - **Linux / macOS**:
+        ```bash
+        REACT_NATIVE_PACKAGER_HOSTNAME=100.X.Y.Z npx expo start
+        ```
+      *(Replace `100.X.Y.Z` with your PC's Tailscale IPv4 address).*
