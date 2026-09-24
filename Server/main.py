@@ -511,24 +511,28 @@ async def delete_user(user_id: int, session: AsyncSession = Depends(get_session)
     for img in user_to_remove.images:
         await session.delete(img)
 
-    folder_path = f"data/images/users/{user_id}"
-    if os.path.exists(folder_path):
-        try:
-            shutil.rmtree(folder_path)
-        except Exception as e:  # noqa: BLE001
-            print(f"Błąd przy usuwaniu plików: {e}")
-
+    folder_to_delete = f"data/images/users/{user_id}"
+    files_to_delete = []
     for alert in user_to_remove.alerts:
         if alert.id is not None:
+            files_to_delete.append(f"data/images/captured/{alert.image}")
             await delete_alert(alert.id, False, session)
 
+    await session.delete(user_to_remove)
     await session.commit()
 
     cooldown_key = f"cooldown:user:{user_id}"
     await redis.delete(cooldown_key)
 
-    await session.delete(user_to_remove)
-    await session.commit()
+    if os.path.exists(folder_to_delete):
+        try:
+            shutil.rmtree(folder_to_delete)
+        except Exception as e:  # noqa: BLE001
+            print(f"Error while removing direcotry {folder_to_delete}: {e}")
+
+    for file in files_to_delete:
+        if os.path.exists(file):
+            os.remove(file)
 
     await notify_model_sync()
 
@@ -652,11 +656,6 @@ async def delete_alert(
     if not alert_to_remove:
         raise HTTPException(status_code=404, detail="Alert not found")
 
-    # Physical removal of the file
-    file_path = f"data/images/captured/{alert_to_remove.image}"
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
     user_id = alert_to_remove.recognised_user_id
 
     await session.delete(alert_to_remove)
@@ -665,6 +664,9 @@ async def delete_alert(
     # If True, it's a direct call from the mobile app, so we need to clean up temporary users if they have no alerts left
     if auto_commit:
         await session.commit()
+        file_path = f"data/images/captured/{alert_to_remove.image}"
+        if os.path.exists(file_path):
+            os.remove(file_path)
         if user_id is not None:
             user = await session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
             if user and user.is_temporary and not user.alerts:
