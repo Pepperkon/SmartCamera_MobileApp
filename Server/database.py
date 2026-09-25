@@ -2,14 +2,18 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import JSON, Column
-from sqlmodel import Field, Relationship, Session, SQLModel, create_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-DATABASE_URL = "sqlite:///data/database.db"
-engine = create_engine(DATABASE_URL, echo=False, connect_args={"check_same_thread": False})
+DATABASE_URL = "sqlite+aiosqlite:///data/database.db"
+engine = create_async_engine(DATABASE_URL, echo=False)
+
+async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
-def get_session():
-    with Session(engine) as session:
+async def get_session():
+    async with async_session_maker() as session:
         yield session
 
 

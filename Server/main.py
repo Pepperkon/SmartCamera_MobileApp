@@ -7,8 +7,18 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Any, BinaryIO
 
+import aiofiles
 import httpx
-from database import Alert, AlertRead, FaceTemplate, User, UserRead, engine, get_session
+from database import (
+    Alert,
+    AlertRead,
+    FaceTemplate,
+    User,
+    UserRead,
+    async_session_maker,
+    engine,
+    get_session,
+)
 from dotenv import load_dotenv
 from fastapi import (
     BackgroundTasks,
@@ -28,7 +38,8 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from redis.asyncio import Redis
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, SQLModel, col, delete, select
+from sqlmodel import SQLModel, col, delete, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 # Manages active WebSocket connections to push real-time updates to the frontend
@@ -80,9 +91,10 @@ async def mark_recognised(session_id: str, user_id: int) -> bool:
 async def cleanup_alerts(interval_seconds: int, max_age_hours: int) -> None:
     while True:
         threshold = datetime.now() - timedelta(hours=max_age_hours)
-        with Session(engine) as session:
-            old_alerts = session.exec(select(Alert).where(Alert.created_at < threshold)).all()
-
+        async with async_session_maker() as session:
+            old_alerts = (
+                await session.exec(select(Alert).where(Alert.created_at < threshold))
+            ).all()
             if old_alerts:
                 deleted_alerts = []
                 for old_alert in old_alerts:
@@ -94,8 +106,8 @@ async def cleanup_alerts(interval_seconds: int, max_age_hours: int) -> None:
                             print(f"Could not delete file {image_path}: {e}")
                     deleted_alerts.append(old_alert.id)
 
-                session.exec(delete(Alert).where(col(Alert.created_at) < threshold))
-                session.commit()
+                await session.exec(delete(Alert).where(col(Alert.created_at) < threshold))
+                await session.commit()
                 print(f"Deleted {len(old_alerts)} alerts")
 
                 # Broadcasting about deleting of old alerts
@@ -106,7 +118,7 @@ async def cleanup_alerts(interval_seconds: int, max_age_hours: int) -> None:
                 statement = (
                     select(User).where(User.is_temporary).options(selectinload(User.alerts))  # type: ignore
                 )
-                users = session.exec(statement).all()
+                users = (await session.exec(statement)).all()
 
                 for user in users:
                     if user.id is not None and not user.alerts:
@@ -118,7 +130,8 @@ async def cleanup_alerts(interval_seconds: int, max_age_hours: int) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: creating sql engine and all of the directories
-    SQLModel.metadata.create_all(engine)
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
     os.makedirs("data/images/users", exist_ok=True)
     os.makedirs("data/images/captured", exist_ok=True)
     task = asyncio.create_task(cleanup_alerts(interval_seconds=60, max_age_hours=1))
@@ -154,17 +167,22 @@ def get_client(request: Request) -> httpx.AsyncClient:
 
 
 # Uploading a captured image
-def save_image_to_disk(filename: str, img_data: bytes | io.BytesIO | BinaryIO) -> None:
+async def save_image_to_disk(filename: str, img_data: bytes | io.BytesIO | BinaryIO) -> None:
     filepath = f"data/images/captured/{filename}"
-    with open(filepath, "wb") as f:
-        if isinstance(img_data, bytes):
-            f.write(img_data)
-        else:
-            shutil.copyfileobj(img_data, f)
+
+    if isinstance(img_data, bytes):
+        data = img_data
+    elif isinstance(img_data, io.BytesIO):
+        data = img_data.getvalue()
+    else:
+        data = img_data.read()
+
+    async with aiofiles.open(filepath, "wb") as f:
+        await f.write(data)
 
 
 # Creating an alert
-async def add_alert(data: dict[str, Any], session: Session) -> Alert:
+async def add_alert(data: dict[str, Any], session: AsyncSession) -> Alert:
     print(
         f"[ALERT] Creating database alert: '{data['title']}' for user ID: {data['recognised_user_id']}"
     )
@@ -182,8 +200,8 @@ async def add_alert(data: dict[str, Any], session: Session) -> Alert:
     )
 
     session.add(new_alert)
-    session.commit()
-    session.refresh(new_alert)
+    await session.commit()
+    await session.refresh(new_alert)
 
     alert_dict = AlertRead.model_validate(new_alert).model_dump()
     alert_data = {"type": "new_alert", "alert": alert_dict}
@@ -213,31 +231,32 @@ async def add_user_image_logic(
     user_id: int,
     file: UploadFile | io.BytesIO,
     face_encoding: list[float],
-    session: Session,
+    session: AsyncSession,
 ) -> FaceTemplate:
     new_template = FaceTemplate(filepath="pending", user_id=user_id, embedding=face_encoding)
     session.add(new_template)
-    session.commit()
-    session.refresh(new_template)
+    await session.commit()
+    await session.refresh(new_template)
 
     filename = f"template_{new_template.id}_{int(time.time())}.jpg"
     user_dir = f"data/images/users/{user_id}"
     filepath = f"{user_dir}/{filename}"
 
     os.makedirs(user_dir, exist_ok=True)
-    with open(filepath, "wb") as buffer:
-        # path for io.BytesIO objects
-        if isinstance(file, io.BytesIO):
-            file.seek(0)
-            buffer.write(file.read())
-        # path for UploadFile objects
-        else:
-            file.file.seek(0)
-            shutil.copyfileobj(file.file, buffer)
+    # path for io.BytesIO objects
+    if isinstance(file, io.BytesIO):
+        data = file.getvalue()
+    # path for UploadFile objects
+    else:
+        await file.seek(0)
+        data = await file.read()
+
+    async with aiofiles.open(filepath, "wb") as buffer:
+        await buffer.write(data)
 
     new_template.filepath = filename
     session.add(new_template)
-    session.commit()
+    await session.commit()
 
     return new_template
 
@@ -271,7 +290,7 @@ def _process_file_writing(contents: bytes, coordinates: tuple[int, int, int, int
 async def process_image_pipeline(
     contents: bytes, session_id: str, client: httpx.AsyncClient
 ) -> None:
-    with Session(engine) as session:
+    async with async_session_maker() as session:
         response = await client.post(
             f"{MODEL_URL}/identify",
             content=contents,
@@ -292,7 +311,7 @@ async def process_image_pipeline(
         if not results:
             print("[RECOGNIZE] Decision: No faces detected. Saving empty image and exiting.")
             image_name = f"empty_{time_stamp}.jpg"
-            await asyncio.to_thread(save_image_to_disk, image_name, contents)
+            await save_image_to_disk(image_name, contents)
             return
 
         new_template_added = False
@@ -310,10 +329,10 @@ async def process_image_pipeline(
                 print("[RECOGNIZE] Decision: Face is unknown. Creating a temporary user.")
                 new_user = User(name="Stranger")
                 session.add(new_user)
-                session.commit()
-                session.refresh(new_user)
+                await session.commit()
+                await session.refresh(new_user)
                 new_user.name += f"_{new_user.id}"
-                session.commit()
+                await session.commit()
                 assert new_user.id is not None, "Fresh user_id cannot be None"
                 user_id = new_user.id
                 print(f"[RECOGNIZE] Success: Created new user with ID: {user_id}")
@@ -337,7 +356,7 @@ async def process_image_pipeline(
                 )
                 continue
 
-            user = session.get(User, user_id)
+            user = await session.get(User, user_id)
 
             if not user:
                 print(
@@ -366,7 +385,7 @@ async def process_image_pipeline(
                 confidence = 0.0
 
             if not image_saved:
-                await asyncio.to_thread(save_image_to_disk, image_name, contents)
+                await save_image_to_disk(image_name, contents)
                 image_saved = True
 
             await add_alert(
@@ -389,17 +408,17 @@ async def process_image_pipeline(
 
 
 # Making it available for the model to get the embeddings of known users
-def get_templates(session: Session) -> list[dict[str, Any]]:
+async def get_templates(session: AsyncSession) -> list[dict[str, Any]]:
     statement = select(FaceTemplate)
-    results = session.exec(statement).all()
+    results = (await session.exec(statement)).all()
     return [{"user_id": f.user_id, "embedding": f.embedding} for f in results]
 
 
 @app.get("/faces/templates")
 async def get_faces_templates(
-    session: Session = Depends(get_session),
+    session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
-    return get_templates(session)
+    return await get_templates(session)
 
 
 # Displaying users in the mobile app
@@ -408,20 +427,21 @@ async def get_users(
     is_temporary: bool = False,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    session: Session = Depends(get_session),
+    session: AsyncSession = Depends(get_session),
 ):
     """Zwraca listę wszystkich użytkowników."""
     statement = (
         select(User)
         .options(
             selectinload(User.images),  # type: ignore
+            selectinload(User.alerts),  # type: ignore
         )
         .where(User.is_temporary == is_temporary)
         .order_by(col(User.name))
         .offset(offset)
         .limit(limit)
     )
-    results = session.exec(statement).all()
+    results = (await session.exec(statement)).all()
     return results
 
 
@@ -430,7 +450,7 @@ async def get_users(
 async def create_user(
     name: str = Form(...),
     file: UploadFile = File(...),
-    session: Session = Depends(get_session),
+    session: AsyncSession = Depends(get_session),
     client: httpx.AsyncClient = Depends(get_client),
 ) -> User:
     face_encodings = await get_encoding_from_model(client, file)
@@ -449,8 +469,8 @@ async def create_user(
 
     new_user = User(name=name, is_temporary=False)
     session.add(new_user)
-    session.commit()
-    session.refresh(new_user)
+    await session.commit()
+    await session.refresh(new_user)
 
     assert new_user.id is not None, "User id cannot be None"
 
@@ -464,7 +484,7 @@ async def create_user(
             selectinload(User.alerts),  # type: ignore
         )
     )
-    full_user = session.exec(statement).first()
+    full_user = (await session.exec(statement)).first()
     assert full_user is not None, "Created user not found in database"
 
     await notify_model_sync(client)
@@ -474,7 +494,7 @@ async def create_user(
 
 # Deleting a user
 @app.delete("/users/{user_id}")
-async def delete_user(user_id: int, session: Session = Depends(get_session)) -> dict[str, Any]:
+async def delete_user(user_id: int, session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     statement = (
         select(User)
         .where(User.id == user_id)
@@ -483,32 +503,36 @@ async def delete_user(user_id: int, session: Session = Depends(get_session)) -> 
             selectinload(User.alerts),  # type: ignore
         )
     )
-    user_to_remove = session.exec(statement).first()
+    user_to_remove = (await session.exec(statement)).first()
 
     if not user_to_remove:
         raise HTTPException(status_code=404, detail="User not found")
 
     for img in user_to_remove.images:
-        session.delete(img)
+        await session.delete(img)
 
-    folder_path = f"data/images/users/{user_id}"
-    if os.path.exists(folder_path):
-        try:
-            shutil.rmtree(folder_path)
-        except Exception as e:  # noqa: BLE001
-            print(f"Błąd przy usuwaniu plików: {e}")
-
+    folder_to_delete = f"data/images/users/{user_id}"
+    files_to_delete = []
     for alert in user_to_remove.alerts:
         if alert.id is not None:
+            files_to_delete.append(f"data/images/captured/{alert.image}")
             await delete_alert(alert.id, False, session)
 
-    session.commit()
+    await session.delete(user_to_remove)
+    await session.commit()
 
     cooldown_key = f"cooldown:user:{user_id}"
     await redis.delete(cooldown_key)
 
-    session.delete(user_to_remove)
-    session.commit()
+    if os.path.exists(folder_to_delete):
+        try:
+            shutil.rmtree(folder_to_delete)
+        except Exception as e:  # noqa: BLE001
+            print(f"Error while removing direcotry {folder_to_delete}: {e}")
+
+    for file in files_to_delete:
+        if os.path.exists(file):
+            os.remove(file)
 
     await notify_model_sync()
 
@@ -523,7 +547,7 @@ async def delete_user(user_id: int, session: Session = Depends(get_session)) -> 
 async def add_user_image(
     user_id: int,
     file: UploadFile = File(...),
-    session: Session = Depends(get_session),
+    session: AsyncSession = Depends(get_session),
     client: httpx.AsyncClient = Depends(get_client),
 ):
     face_encodings = await get_encoding_from_model(client, file)
@@ -540,7 +564,7 @@ async def add_user_image(
     if len(face_encodings) > 1:
         raise HTTPException(status_code=422, detail="MULTIPLE_FACES")
 
-    user = session.get(User, user_id)
+    user = await session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -555,7 +579,7 @@ async def add_user_image(
             selectinload(User.alerts),  # type: ignore
         )
     )
-    updated_user = session.exec(statement).first()
+    updated_user = (await session.exec(statement)).first()
 
     await notify_model_sync(client)
 
@@ -564,11 +588,13 @@ async def add_user_image(
 
 # Get information about a certain user
 @app.get("/users/{user_id}", response_model=UserRead)
-async def get_user(user_id: int, session: Session = Depends(get_session)):
+async def get_user(user_id: int, session: AsyncSession = Depends(get_session)):
     statement = (
-        select(User).where(User.id == user_id).options(selectinload(User.images))  # type: ignore
+        select(User)
+        .where(User.id == user_id)
+        .options(selectinload(User.images), selectinload(User.alerts))  # type: ignore
     )
-    user = session.exec(statement).first()
+    user = (await session.exec(statement)).first()
 
     if not user:
         raise HTTPException(status_code=404, detail="Użytkownik nie istnieje")
@@ -581,10 +607,10 @@ async def get_user(user_id: int, session: Session = Depends(get_session)):
 async def get_alerts(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    session: Session = Depends(get_session),
+    session: AsyncSession = Depends(get_session),
 ):
-    return session.exec(
-        select(Alert).order_by(col(Alert.id).desc()).offset(offset).limit(limit)
+    return (
+        await session.exec(select(Alert).order_by(col(Alert.id).desc()).offset(offset).limit(limit))
     ).all()
 
 
@@ -601,15 +627,17 @@ async def websocket_alerts_endpoint(websocket: WebSocket):
 
 # Checking alert's status from New to Read
 @app.post("/alerts/{alert_id}/read")
-async def mark_as_read(alert_id: int, session: Session = Depends(get_session)) -> dict[str, str]:
+async def mark_as_read(
+    alert_id: int, session: AsyncSession = Depends(get_session)
+) -> dict[str, str]:
     """Znajduje alert po ID i zmienia isNew na False."""
-    alert = session.get(Alert, alert_id)
+    alert = await session.get(Alert, alert_id)
     if not alert:
         raise HTTPException(status_code=404, detail="Nie znaleziono alertu")
     alert.isNew = False
     session.add(alert)
-    session.commit()
-    session.refresh(alert)
+    await session.commit()
+    await session.refresh(alert)
 
     alert_dict = AlertRead.model_validate(alert).model_dump()
     # Instruct clients to update the alert's state
@@ -621,28 +649,26 @@ async def mark_as_read(alert_id: int, session: Session = Depends(get_session)) -
 # Deleting an alert
 @app.delete("/alerts/{alert_id}")
 async def delete_alert(
-    alert_id: int, auto_commit: bool = True, session: Session = Depends(get_session)
+    alert_id: int, auto_commit: bool = True, session: AsyncSession = Depends(get_session)
 ) -> dict[str, Any]:
-    alert_to_remove = session.get(Alert, alert_id)
+    alert_to_remove = await session.get(Alert, alert_id)
 
     if not alert_to_remove:
         raise HTTPException(status_code=404, detail="Alert not found")
 
-    # Physical removal of the file
-    file_path = f"data/images/captured/{alert_to_remove.image}"
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
     user_id = alert_to_remove.recognised_user_id
 
-    session.delete(alert_to_remove)
+    await session.delete(alert_to_remove)
 
     # If auto_commit is False, this was triggered by the delete_user function which already deletes the user
     # If True, it's a direct call from the mobile app, so we need to clean up temporary users if they have no alerts left
     if auto_commit:
-        session.commit()
+        await session.commit()
+        file_path = f"data/images/captured/{alert_to_remove.image}"
+        if os.path.exists(file_path):
+            os.remove(file_path)
         if user_id is not None:
-            user = session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
+            user = await session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
             if user and user.is_temporary and not user.alerts:
                 await delete_user(user_id, session)
 
@@ -655,9 +681,9 @@ async def delete_alert(
 # Upgrading a temporary user to a permanent one and updating their old alerts
 @app.patch("/users/{user_id}")
 async def save_temporary_user(
-    user_id: int, name: str, session: Session = Depends(get_session)
+    user_id: int, name: str, session: AsyncSession = Depends(get_session)
 ) -> dict[str, str]:
-    user = session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
+    user = await session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -675,7 +701,7 @@ async def save_temporary_user(
         alert_data = {"type": "updated_alert", "alert": alert_dict}
         await manager.broadcast(alert_data)
 
-    session.commit()
+    await session.commit()
 
     return {"message": f"User {user.name} saved"}
 
@@ -683,14 +709,14 @@ async def save_temporary_user(
 # Changing user's trust status
 @app.patch("/users/{user_id}/trust")
 async def update_trust_status(
-    user_id: int, is_trusted: bool, session: Session = Depends(get_session)
+    user_id: int, is_trusted: bool, session: AsyncSession = Depends(get_session)
 ) -> dict[str, Any]:
-    user = session.get(User, user_id)
+    user = await session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     user.is_trusted = is_trusted
-    session.commit()
+    await session.commit()
     return {"message": "Status updated", "is_trusted": user.is_trusted}
 
 
@@ -713,4 +739,4 @@ async def recognize_face(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, ws_ping_interval=20.0, ws_ping_timeout=20.0)
