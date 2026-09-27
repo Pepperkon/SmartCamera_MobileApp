@@ -1,14 +1,14 @@
 import asyncio
-import io
 import os
 import shutil
-import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Any, BinaryIO
+from typing import Any
 
-import aiofiles
 import httpx
+from arq import create_pool
+from arq.connections import RedisSettings
 from database import (
     Alert,
     AlertRead,
@@ -21,7 +21,6 @@ from database import (
 )
 from dotenv import load_dotenv
 from fastapi import (
-    BackgroundTasks,
     Depends,
     FastAPI,
     File,
@@ -35,8 +34,12 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from PIL import Image
 from redis.asyncio import Redis
+from services import (
+    add_user_image_logic,
+    notify_model_sync,
+    save_image_to_disk,
+)
 from sqlalchemy.orm import selectinload
 from sqlmodel import SQLModel, col, delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -75,17 +78,6 @@ if not MODEL_URL:
     raise RuntimeError("MODEL_URL not found, check README for instructions")
 
 redis = Redis(host="localhost", port=6379)
-
-
-async def mark_recognised(session_id: str, user_id: int) -> bool:
-    key = f"session:{session_id}"
-
-    added = await redis.sadd(key, user_id)
-
-    if added:
-        await redis.expire(key, 3600)
-
-    return added == 1
 
 
 async def cleanup_alerts(interval_seconds: int, max_age_hours: int) -> None:
@@ -136,6 +128,8 @@ async def lifespan(app: FastAPI):
     os.makedirs("data/images/captured", exist_ok=True)
     task = asyncio.create_task(cleanup_alerts(interval_seconds=60, max_age_hours=1))
 
+    redis_pool = await create_pool(RedisSettings())
+    app.state.redis_pool = redis_pool
     # --- POPRAWKA: Dodajemy timeout na odczyt (np. 30 sekund) ---
     # Możesz też zaimportować httpx i użyć httpx.Timeout(30.0),
     # ale przekazanie samej liczby jako float też zadziała dla wszystkich limitów.
@@ -144,6 +138,7 @@ async def lifespan(app: FastAPI):
     # Starting the application
     yield
 
+    await app.state.redis_pool.close()
     # Shutdown of the application
     task.cancel()
     await app.state.client.aclose()
@@ -166,54 +161,6 @@ def get_client(request: Request) -> httpx.AsyncClient:
     return request.app.state.client
 
 
-# Uploading a captured image
-async def save_image_to_disk(filename: str, img_data: bytes | io.BytesIO | BinaryIO) -> None:
-    filepath = f"data/images/captured/{filename}"
-
-    if isinstance(img_data, bytes):
-        data = img_data
-    elif isinstance(img_data, io.BytesIO):
-        data = img_data.getvalue()
-    else:
-        data = img_data.read()
-
-    async with aiofiles.open(filepath, "wb") as f:
-        await f.write(data)
-
-
-# Creating an alert
-async def add_alert(data: dict[str, Any], session: AsyncSession) -> Alert:
-    print(
-        f"[ALERT] Creating database alert: '{data['title']}' for user ID: {data['recognised_user_id']}"
-    )
-
-    new_alert = Alert(
-        title=data["title"],
-        time=data["time"],
-        date=data["date"],
-        image=data["image"],
-        isNew=data["isNew"],
-        recognised_user_id=data["recognised_user_id"],
-        embedding=data["embedding"],
-        confidence=data["confidence"],
-        location=data["location"],
-    )
-
-    session.add(new_alert)
-    await session.commit()
-    await session.refresh(new_alert)
-
-    alert_dict = AlertRead.model_validate(new_alert).model_dump()
-    alert_data = {"type": "new_alert", "alert": alert_dict}
-    print(
-        f"[WS] Broadcasting alert (ID: {new_alert.id}) to {len(manager.active_connections)} connected WebSocket clients."
-    )
-    # Notify all connected clients about the newly created alert
-    await manager.broadcast(alert_data)
-
-    return new_alert
-
-
 async def get_encoding_from_model(
     client: httpx.AsyncClient, file: UploadFile
 ) -> list[list[float]] | None:
@@ -225,186 +172,6 @@ async def get_encoding_from_model(
     except httpx.HTTPError as e:
         print(f"Error while connecting to the model: {e}")
         return None
-
-
-async def add_user_image_logic(
-    user_id: int,
-    file: UploadFile | io.BytesIO,
-    face_encoding: list[float],
-    session: AsyncSession,
-) -> FaceTemplate:
-    new_template = FaceTemplate(filepath="pending", user_id=user_id, embedding=face_encoding)
-    session.add(new_template)
-    await session.commit()
-    await session.refresh(new_template)
-
-    filename = f"template_{new_template.id}_{int(time.time())}.jpg"
-    user_dir = f"data/images/users/{user_id}"
-    filepath = f"{user_dir}/{filename}"
-
-    os.makedirs(user_dir, exist_ok=True)
-    # path for io.BytesIO objects
-    if isinstance(file, io.BytesIO):
-        data = file.getvalue()
-    # path for UploadFile objects
-    else:
-        await file.seek(0)
-        data = await file.read()
-
-    async with aiofiles.open(filepath, "wb") as buffer:
-        await buffer.write(data)
-
-    new_template.filepath = filename
-    session.add(new_template)
-    await session.commit()
-
-    return new_template
-
-
-async def notify_model_sync(client: httpx.AsyncClient | None = None) -> None:
-    try:
-        if client and not isinstance(client, httpx.AsyncClient):
-            client = None
-
-        if client:
-            response = await client.post(f"{MODEL_URL}/sync")
-            response.raise_for_status()
-        else:
-            async with httpx.AsyncClient() as temp_client:
-                response = await temp_client.post(f"{MODEL_URL}/sync")
-                response.raise_for_status()
-    except httpx.HTTPError as e:
-        print(f"Error while connecting to the model: {e}")
-
-
-def _process_file_writing(contents: bytes, coordinates: tuple[int, int, int, int]) -> io.BytesIO:
-    # Scale properly the image for it to show only the wanted face
-    base_image = Image.open(io.BytesIO(contents))
-    cropped_im = base_image.crop(coordinates)
-    img_bytes = io.BytesIO()
-    cropped_im.save(img_bytes, format="JPEG")
-    img_bytes.seek(0)
-    return img_bytes
-
-
-async def process_image_pipeline(
-    contents: bytes, session_id: str, client: httpx.AsyncClient
-) -> None:
-    async with async_session_maker() as session:
-        response = await client.post(
-            f"{MODEL_URL}/identify",
-            content=contents,
-        )
-        response.raise_for_status()
-
-        results = response.json().get("results", [])
-        print(f"[RECOGNIZE] Model returned {len(results)} recognized faces.")
-
-        now = datetime.now()
-        time_str = now.strftime("%H:%M:%S")
-        date_str = now.strftime("%d.%m.%Y")
-        time_stamp = now.strftime("%d.%m.%Y_%H-%M-%S")
-
-        image_name = f"{time_stamp}.jpg"
-        image_saved = False
-
-        if not results:
-            print("[RECOGNIZE] Decision: No faces detected. Saving empty image and exiting.")
-            image_name = f"empty_{time_stamp}.jpg"
-            await save_image_to_disk(image_name, contents)
-            return
-
-        new_template_added = False
-
-        for i, res in enumerate(results):
-            user_id = res["user_id"]
-            print(f"[RECOGNIZE] Processing face {i + 1}/{len(results)}. Returned ID: {user_id}")
-
-            top, right, bottom, left = res["location"]
-
-            # When an uknown face is detected a new user is created
-            # This user is untrusted and temporary
-            # This means that when all their alerts are deleted the user is also deleted
-            if user_id is None:
-                print("[RECOGNIZE] Decision: Face is unknown. Creating a temporary user.")
-                new_user = User(name="Stranger")
-                session.add(new_user)
-                await session.commit()
-                await session.refresh(new_user)
-                new_user.name += f"_{new_user.id}"
-                await session.commit()
-                assert new_user.id is not None, "Fresh user_id cannot be None"
-                user_id = new_user.id
-                print(f"[RECOGNIZE] Success: Created new user with ID: {user_id}")
-
-            print(
-                f"[RECOGNIZE] Checking for session duplication [{session_id}] for ID: {user_id}..."
-            )
-            if not await mark_recognised(session_id, user_id):
-                print(
-                    f"[RECOGNIZE] Rejected: User {user_id} already recognized in this session. Skipping."
-                )
-                continue
-
-            print(f"[RECOGNIZE] Checking global Redis cooldown for ID: {user_id}...")
-            cooldown_key = f"cooldown:user:{user_id}"
-            cooldown_created = await redis.set(cooldown_key, "active", nx=True, ex=300)
-
-            if not cooldown_created:
-                print(
-                    f"[RECOGNIZE] Rejected: Active cooldown (5 min) for user {user_id}. Skipping."
-                )
-                continue
-
-            user = await session.get(User, user_id)
-
-            if not user:
-                print(
-                    f"[RECOGNIZE] Error: User {user_id} does not exist in the database! Skipping."
-                )
-                continue
-            print(
-                f"[RECOGNIZE] Decision: User {user.name} qualified for an alert. Trusted status: {user.is_trusted}"
-            )
-
-            if not user.is_temporary:
-                title = f"Recognized: {user.name}"
-            else:
-                title = f"Unknown: {user.name}"
-                img_bytes = await asyncio.to_thread(
-                    _process_file_writing, contents, (left, top, right, bottom)
-                )
-                # For temporary users add many faces for reference
-                await add_user_image_logic(user_id, img_bytes, res["encoding"], session)
-                new_template_added = True
-
-            distance = res.get("distance")
-            if distance is not None:
-                confidence = max(0.0, 1 - distance) * 100
-            else:
-                confidence = 0.0
-
-            if not image_saved:
-                await save_image_to_disk(image_name, contents)
-                image_saved = True
-
-            await add_alert(
-                {
-                    "title": title,
-                    "time": time_str,
-                    "date": date_str,
-                    "image": image_name,
-                    "isNew": True,
-                    "recognised_user_id": user_id,
-                    "embedding": res["encoding"],
-                    "confidence": confidence,
-                    "location": [top, right, bottom, left],
-                },
-                session,
-            )
-
-        if new_template_added:
-            await notify_model_sync(client)
 
 
 # Making it available for the model to get the embeddings of known users
@@ -487,7 +254,8 @@ async def create_user(
     full_user = (await session.exec(statement)).first()
     assert full_user is not None, "Created user not found in database"
 
-    await notify_model_sync(client)
+    if MODEL_URL:
+        await notify_model_sync(MODEL_URL, client)
 
     return full_user
 
@@ -534,7 +302,8 @@ async def delete_user(user_id: int, session: AsyncSession = Depends(get_session)
         if os.path.exists(file):
             os.remove(file)
 
-    await notify_model_sync()
+    if MODEL_URL:
+        await notify_model_sync(MODEL_URL)
 
     return {
         "message": f"User {user_id} and all their data removed",
@@ -581,7 +350,8 @@ async def add_user_image(
     )
     updated_user = (await session.exec(statement)).first()
 
-    await notify_model_sync(client)
+    if MODEL_URL:
+        await notify_model_sync(MODEL_URL, client)
 
     return updated_user
 
@@ -722,18 +492,24 @@ async def update_trust_status(
 
 @app.post("/recognize")
 async def recognize_face(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    session_id: str = Form(...),
-    client: httpx.AsyncClient = Depends(get_client),
+    request: Request, file: UploadFile = File(...), session_id: str = Form(...)
 ) -> dict[str, str]:
     print(f"\n[RECOGNIZE] --- New request for session: {session_id} ---")
 
     contents = await file.read()
+    filename = f"{str(uuid.uuid4())}.jpg"
 
-    background_tasks.add_task(process_image_pipeline, contents, session_id, client)
+    await save_image_to_disk(filename, contents)
+
+    await app.state.redis_pool.enqueue_job("process_image_worker", session_id, filename)
 
     return {"status": "success"}
+
+
+@app.post("/internal/broadcast")
+async def broadcast_alert(payload: dict):
+    await manager.broadcast(payload)
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":
