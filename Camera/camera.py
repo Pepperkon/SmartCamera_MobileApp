@@ -6,10 +6,11 @@ from dotenv import load_dotenv
 
 TEMP_PHOTO = "temp_capture.jpg"
 load_dotenv()
-SERVER_URL = os.environ.get("SERVER_URL")
+SERVER_URL = os.environ.get("SERVER_URL", "")
+INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
-if not SERVER_URL:
-    raise RuntimeError("SERVER_URL not found, check README for instructions")
+if not SERVER_URL or not INTERNAL_API_KEY:
+    raise RuntimeError("SERVER_URL or INTERNAL_API_KEY not found, check README for instructions")
 
 
 def take_photo(filename):
@@ -52,8 +53,9 @@ def send_to_model(session_id, filename):
             payload = {"session_id": session_id}
             print(f"📡 Wysyłanie do modelu: {SERVER_URL}/recognize...")
 
+            headers = {"X-Internal-Token": INTERNAL_API_KEY}
             response = requests.post(
-                f"{SERVER_URL}/recognize", files=files, data=payload, timeout=60
+                f"{SERVER_URL}/recognize", files=files, data=payload, headers=headers, timeout=60
             )
 
             if response.status_code == 200:

@@ -5,6 +5,7 @@ from typing import BinaryIO
 
 import aiofiles
 import httpx
+from auth import INTERNAL_API_KEY
 from database import FaceTemplate
 from fastapi import UploadFile
 from PIL import Image
@@ -87,12 +88,14 @@ async def notify_model_sync(model_url: str, client: httpx.AsyncClient | None = N
         if client and not isinstance(client, httpx.AsyncClient):
             client = None
 
+        headers = {"X-Internal-Token": INTERNAL_API_KEY}
+
         if client:
-            response = await client.post(f"{model_url}/sync")
+            response = await client.post(f"{model_url}/sync", headers=headers)
             response.raise_for_status()
         else:
             async with httpx.AsyncClient() as temp_client:
-                response = await temp_client.post(f"{model_url}/sync")
+                response = await temp_client.post(f"{model_url}/sync", headers=headers)
                 response.raise_for_status()
     except httpx.HTTPError as e:
         print(f"Error while connecting to the model: {e}")

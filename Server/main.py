@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 from arq import create_pool
 from arq.connections import RedisSettings
+from auth import INTERNAL_API_KEY, verify_api_key
 from database import (
     Alert,
     AlertRead,
@@ -165,8 +166,9 @@ async def get_encoding_from_model(
     client: httpx.AsyncClient, file: UploadFile
 ) -> list[list[float]] | None:
     try:
+        headers = {"X-Internal-Token": INTERNAL_API_KEY}
         files = {"file": (file.filename, await file.read(), file.content_type)}
-        response = await client.post(f"{MODEL_URL}/encode", files=files)
+        response = await client.post(f"{MODEL_URL}/encode", files=files, headers=headers)
         await file.seek(0)
         return response.json().get("encodings")
     except httpx.HTTPError as e:
@@ -181,7 +183,7 @@ async def get_templates(session: AsyncSession) -> list[dict[str, Any]]:
     return [{"user_id": f.user_id, "embedding": f.embedding} for f in results]
 
 
-@app.get("/faces/templates")
+@app.get("/faces/templates", dependencies=[Depends(verify_api_key)])
 async def get_faces_templates(
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
@@ -490,7 +492,7 @@ async def update_trust_status(
     return {"message": "Status updated", "is_trusted": user.is_trusted}
 
 
-@app.post("/recognize")
+@app.post("/recognize", dependencies=[Depends(verify_api_key)])
 async def recognize_face(
     request: Request, file: UploadFile = File(...), session_id: str = Form(...)
 ) -> dict[str, str]:
@@ -506,7 +508,7 @@ async def recognize_face(
     return {"status": "success"}
 
 
-@app.post("/internal/broadcast")
+@app.post("/internal/broadcast", dependencies=[Depends(verify_api_key)])
 async def broadcast_alert(payload: dict):
     await manager.broadcast(payload)
     return {"status": "ok"}

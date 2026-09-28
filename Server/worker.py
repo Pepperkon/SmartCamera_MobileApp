@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 from arq import Worker
 from arq.connections import RedisSettings
+from auth import INTERNAL_API_KEY
 from database import (
     Alert,
     AlertRead,
@@ -43,12 +44,10 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
 
     path = Path(f"data/images/captured/{filename}")
     contents = path.read_bytes()
+    headers = {"X-Internal-Token": INTERNAL_API_KEY}
 
     async with async_session_maker() as session:
-        response = await client.post(
-            f"{model_url}/identify",
-            content=contents,
-        )
+        response = await client.post(f"{model_url}/identify", content=contents, headers=headers)
         response.raise_for_status()
 
         results = response.json().get("results", [])
@@ -155,6 +154,7 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
                 await client.post(
                     "http://localhost:8000/internal/broadcast",
                     json={"type": "new_alert", "alert": alert_dict},
+                    headers=headers,
                 )
             except httpx.HTTPError as e:
                 print(f"[WORKER] Communication error with FastAPI during broadcast: {e}")
