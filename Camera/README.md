@@ -12,11 +12,13 @@ This module is responsible for the physical interface with the camera and motion
 
 2. **Environment Configuration**
 
-    Create a `.env` file in this directory to store your network configuration (URL to connect with the central Server):
+    Create a `.env` file in this directory to store your network configuration and internal security key:
     
     ```text
     SERVER_URL=http://192.168.X.X:8000
+    INTERNAL_API_KEY=your_shared_secret_key
     ```
+    *(Refer to the root README for instructions on generating the `INTERNAL_API_KEY`)*
 
 3. **Installation**
 

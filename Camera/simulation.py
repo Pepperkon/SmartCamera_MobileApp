@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 load_dotenv()
 SERVER_URL = os.environ.get("SERVER_URL")
 IMAGE_DIR = "test_images"
+INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+
+if not SERVER_URL or not INTERNAL_API_KEY:
+    raise RuntimeError("SERVER_URL or INTERNAL_API_KEY not found, check README for instructions")
 
 
 def run_simulation():
@@ -25,9 +29,14 @@ def run_simulation():
             with open(img_path, "rb") as f:
                 # Creating and sending the UploadFile object as json
                 files = {"file": (img_name, f, "image/jpeg")}
+                headers = {"X-Internal-Token": INTERNAL_API_KEY}
 
                 response = requests.post(
-                    f"{SERVER_URL}/recognize", files=files, data=payload, timeout=60
+                    f"{SERVER_URL}/recognize",
+                    files=files,
+                    data=payload,
+                    headers=headers,
+                    timeout=60,
                 )
 
                 if response.status_code == 200:
