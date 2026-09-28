@@ -27,7 +27,7 @@ This module serves as the intelligence layer of the SmartCam system. It is respo
     Create a `.env` file in this directory to store your network configuration and internal security key:
     
     ```text
-    SERVER_URL=[http://192.168.](http://192.168.)X.X:8000
+    SERVER_URL=http://192.168.X.X:8000
     INTERNAL_API_KEY=your_shared_secret_key
     ```
     *(Refer to the root README for instructions on generating the `INTERNAL_API_KEY`)*

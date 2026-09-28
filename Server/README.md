@@ -31,7 +31,7 @@ This is the central hub of the SmartCam system. It manages the SQLite database, 
     Create a `.env` file in this directory to store your network configuration and internal security key:
       
     ```text
-    MODEL_URL=[http://192.168.](http://192.168.)X.X:8001
+    MODEL_URL=http://192.168.X.X:8001
     INTERNAL_API_KEY=your_shared_secret_key
     ```
     *(Refer to the root README for instructions on generating the `INTERNAL_API_KEY`)*
