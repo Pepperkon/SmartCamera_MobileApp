@@ -28,25 +28,35 @@ This is the central hub of the SmartCam system. It manages the SQLite database, 
 
 3. **Environment Configuration**
 
-    Create a `.env` file in this directory to store your network configuration (URL to connect with the device that runs the AI Model):
-    
+    Create a `.env` file in this directory to store your network configuration and internal security key:
+      
     ```text
-    MODEL_URL=http://192.168.X.X:8001
+    MODEL_URL=[http://192.168.](http://192.168.)X.X:8001
+    INTERNAL_API_KEY=your_shared_secret_key
     ```
+    *(Refer to the root README for instructions on generating the `INTERNAL_API_KEY`)*
 
-3. **Installation**
+4. **Installation**
 
     Using ```uv```, you can install all dependencies and set up the virtual environment with a single command:
     ```bash
     uv sync
     ```
-4. **Running the Server**
+5. **Running the Server & Worker**
 
-    To start the central server, run:
+    To prevent the AI model from overloading during rapid image captures, the image processing logic is offloaded to a background worker. You must run **both** the FastAPI server and the ARQ worker in separate terminal windows.
+  
+    **Terminal 1 (FastAPI Server):**
     ```bash
     uv run main.py
     ```
-5. **Adding new packages**
+  
+    **Terminal 2 (Background Worker):**
+    ```bash
+    uv run worker.py
+    ```
+
+6. **Adding new packages**
 
     If you want to add a new package to the project use the following command:
     ```bash
