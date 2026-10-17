@@ -7,8 +7,9 @@ import face_recognition
 import httpx
 import numpy as np
 import uvicorn
+from auth import INTERNAL_API_KEY, verify_api_key
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
 
 TOLERANCE = 0.50
 load_dotenv()
@@ -18,7 +19,8 @@ SERVER_URL = os.environ.get("SERVER_URL")
 async def sync_known_faces(app: FastAPI) -> bool:
     async with httpx.AsyncClient() as client:
         try:
-            templates = await client.get(f"{SERVER_URL}/faces/templates")
+            headers = {"X-Internal-Token": INTERNAL_API_KEY}
+            templates = await client.get(f"{SERVER_URL}/faces/templates", headers=headers)
             templates.raise_for_status()
             app.state.known_faces = [
                 {"user_id": item["user_id"], "embedding": np.array(item["embedding"])}
@@ -80,7 +82,7 @@ def _process_identification(contents: bytes, known_faces: list) -> list:
 # Core function for recognizing faces
 # Takes all known encodes and an image
 # Returns results for all detected faces
-@app.post("/identify")
+@app.post("/identify", dependencies=[Depends(verify_api_key)])
 async def identify(request: Request):
     contents = await request.body()
     if not request.app.state.is_synced:
@@ -104,7 +106,7 @@ def _process_encoding(contents: bytes):
 
 
 # Endpoint for Server to get an image's encoding
-@app.post("/encode")
+@app.post("/encode", dependencies=[Depends(verify_api_key)])
 async def encode_image(file: UploadFile):
     contents = await file.read()
     if not contents:
@@ -113,7 +115,7 @@ async def encode_image(file: UploadFile):
     return {"encodings": [e.tolist() for e in encodings]}
 
 
-@app.post("/sync")
+@app.post("/sync", dependencies=[Depends(verify_api_key)])
 async def sync(request: Request):
     success = await sync_known_faces(request.app)
     if not success:

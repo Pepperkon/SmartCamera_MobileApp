@@ -8,7 +8,7 @@ Mobile application designed for an intelligent monitoring system
 2. Server - Central database and alert management
 3. Model - Face recognition service
 4. Camera - Script for handling the physical camera on a Raspberry Pi
-5. Redis - In-memory data store used for managing alert cooldowns to prevent notification spam
+5. Redis - In-memory data store used for managing alert cooldowns and background job queues
 
 ---
 
@@ -17,6 +17,23 @@ Mobile application designed for an intelligent monitoring system
 The core infrastructure (**Server**, **Model**, **Camera**, **Redis**) is designed to run locally within the same **Home LAN** network for low latency and security.
 
 Communication between services uses standard HTTP REST endpoints and WebSockets for real-time alert dispatching.
+
+### Security Configuration (Internal API Key)
+
+To prevent unauthorized execution of internal functions, the system requires a shared authorization key (Shared Secret).
+
+**Step 1: Generate a secure key**
+Generate a long, random string using Python's built-in `secrets` module. Run this in your terminal:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+(Copy the generated string)
+
+**Step 2: Add the key to configuration files**
+The generated key must be identical across all modules. Add it to the `.env` files in the three main project directories (`Server/.env`, `Model/.env`, `Camera/.env`):
+```text
+INTERNAL_API_KEY=your_copied_key_here
+```
 
 ---
 
