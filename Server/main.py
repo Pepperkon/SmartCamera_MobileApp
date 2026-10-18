@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 from arq import create_pool
 from arq.connections import RedisSettings
-from auth import INTERNAL_API_KEY, verify_api_key
+from auth import APP_API_KEY, INTERNAL_API_KEY, verify_api_key, verify_app_key
 from database import (
     Alert,
     AlertRead,
@@ -32,6 +32,7 @@ from fastapi import (
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
+    status,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -191,7 +192,7 @@ async def get_faces_templates(
 
 
 # Displaying users in the mobile app
-@app.get("/users", response_model=list[UserRead])
+@app.get("/users", response_model=list[UserRead], dependencies=[Depends(verify_app_key)])
 async def get_users(
     is_temporary: bool = False,
     limit: int = Query(default=20, ge=1, le=100),
@@ -215,7 +216,7 @@ async def get_users(
 
 
 # Creating a new user
-@app.post("/users")
+@app.post("/users", dependencies=[Depends(verify_app_key)])
 async def create_user(
     name: str = Form(...),
     file: UploadFile = File(...),
@@ -263,7 +264,7 @@ async def create_user(
 
 
 # Deleting a user
-@app.delete("/users/{user_id}")
+@app.delete("/users/{user_id}", dependencies=[Depends(verify_app_key)])
 async def delete_user(user_id: int, session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     statement = (
         select(User)
@@ -314,7 +315,9 @@ async def delete_user(user_id: int, session: AsyncSession = Depends(get_session)
 
 
 # Adding a new image for a user
-@app.post("/users/{user_id}/images", response_model=UserRead)
+@app.post(
+    "/users/{user_id}/images", response_model=UserRead, dependencies=[Depends(verify_app_key)]
+)
 async def add_user_image(
     user_id: int,
     file: UploadFile = File(...),
@@ -359,7 +362,7 @@ async def add_user_image(
 
 
 # Get information about a certain user
-@app.get("/users/{user_id}", response_model=UserRead)
+@app.get("/users/{user_id}", response_model=UserRead, dependencies=[Depends(verify_app_key)])
 async def get_user(user_id: int, session: AsyncSession = Depends(get_session)):
     statement = (
         select(User)
@@ -375,7 +378,7 @@ async def get_user(user_id: int, session: AsyncSession = Depends(get_session)):
 
 
 # Returns the list of all alerts
-@app.get("/alerts", response_model=list[AlertRead])
+@app.get("/alerts", response_model=list[AlertRead], dependencies=[Depends(verify_app_key)])
 async def get_alerts(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -387,7 +390,11 @@ async def get_alerts(
 
 
 @app.websocket("/ws/alerts")
-async def websocket_alerts_endpoint(websocket: WebSocket):
+async def websocket_alerts_endpoint(websocket: WebSocket, app_api_key: str):
+    if app_api_key != APP_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Wrong or missing app api key"
+        )
     await manager.connect(websocket)
     try:
         # Keep the connection alive until the client drops
@@ -398,7 +405,7 @@ async def websocket_alerts_endpoint(websocket: WebSocket):
 
 
 # Checking alert's status from New to Read
-@app.post("/alerts/{alert_id}/read")
+@app.post("/alerts/{alert_id}/read", dependencies=[Depends(verify_app_key)])
 async def mark_as_read(
     alert_id: int, session: AsyncSession = Depends(get_session)
 ) -> dict[str, str]:
@@ -419,7 +426,7 @@ async def mark_as_read(
 
 
 # Deleting an alert
-@app.delete("/alerts/{alert_id}")
+@app.delete("/alerts/{alert_id}", dependencies=[Depends(verify_app_key)])
 async def delete_alert(
     alert_id: int, auto_commit: bool = True, session: AsyncSession = Depends(get_session)
 ) -> dict[str, Any]:
@@ -451,7 +458,7 @@ async def delete_alert(
 
 
 # Upgrading a temporary user to a permanent one and updating their old alerts
-@app.patch("/users/{user_id}")
+@app.patch("/users/{user_id}", dependencies=[Depends(verify_app_key)])
 async def save_temporary_user(
     user_id: int, name: str, session: AsyncSession = Depends(get_session)
 ) -> dict[str, str]:
@@ -479,7 +486,7 @@ async def save_temporary_user(
 
 
 # Changing user's trust status
-@app.patch("/users/{user_id}/trust")
+@app.patch("/users/{user_id}/trust", dependencies=[Depends(verify_app_key)])
 async def update_trust_status(
     user_id: int, is_trusted: bool, session: AsyncSession = Depends(get_session)
 ) -> dict[str, Any]:
