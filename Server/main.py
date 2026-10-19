@@ -84,39 +84,42 @@ redis = Redis(host="localhost", port=6379)
 
 async def cleanup_alerts(interval_seconds: int, max_age_hours: int) -> None:
     while True:
-        threshold = datetime.now() - timedelta(hours=max_age_hours)
-        async with async_session_maker() as session:
-            old_alerts = (
-                await session.exec(select(Alert).where(Alert.created_at < threshold))
-            ).all()
-            if old_alerts:
-                deleted_alerts = []
-                for old_alert in old_alerts:
-                    image_path = f"data/images/captured/{old_alert.image}"
-                    if os.path.isfile(image_path):
-                        try:
-                            os.remove(image_path)
-                        except OSError as e:
-                            print(f"Could not delete file {image_path}: {e}")
-                    deleted_alerts.append(old_alert.id)
+        try:
+            threshold = datetime.now() - timedelta(hours=max_age_hours)
+            async with async_session_maker() as session:
+                old_alerts = (
+                    await session.exec(select(Alert).where(Alert.created_at < threshold))
+                ).all()
+                if old_alerts:
+                    deleted_alerts = []
+                    for old_alert in old_alerts:
+                        image_path = f"data/images/captured/{old_alert.image}"
+                        if os.path.isfile(image_path):
+                            try:
+                                os.remove(image_path)
+                            except OSError as e:
+                                print(f"Could not delete file {image_path}: {e}")
+                        deleted_alerts.append(old_alert.id)
 
-                await session.exec(delete(Alert).where(col(Alert.created_at) < threshold))
-                await session.commit()
-                print(f"Deleted {len(old_alerts)} alerts")
+                    await session.exec(delete(Alert).where(col(Alert.created_at) < threshold))
+                    await session.commit()
+                    print(f"Deleted {len(old_alerts)} alerts")
 
-                # Broadcasting about deleting of old alerts
-                for alert_id in deleted_alerts:
-                    await manager.broadcast({"type": "alert_deleted", "alert_id": alert_id})
+                    # Broadcasting about deleting of old alerts
+                    for alert_id in deleted_alerts:
+                        await manager.broadcast({"type": "alert_deleted", "alert_id": alert_id})
 
-                # Automatic removal of temporary users with no alerts left
-                statement = (
-                    select(User).where(User.is_temporary).options(selectinload(User.alerts))  # type: ignore
-                )
-                users = (await session.exec(statement)).all()
+                    # Automatic removal of temporary users with no alerts left
+                    statement = (
+                        select(User).where(User.is_temporary).options(selectinload(User.alerts))  # type: ignore
+                    )
+                    users = (await session.exec(statement)).all()
 
-                for user in users:
-                    if user.id is not None and not user.alerts:
-                        await delete_user(user.id, session)
+                    for user in users:
+                        if user.id is not None and not user.alerts:
+                            await delete_user(user.id, session)
+        except Exception as e:  # noqa: BLE001
+            print(f"Error while automatic alerts cleanup: {e}")
 
         await asyncio.sleep(interval_seconds)
 
