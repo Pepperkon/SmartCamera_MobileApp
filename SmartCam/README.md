@@ -11,11 +11,14 @@ Mobile application built with **React Native** and **Expo**. It serves as the pr
 
 2. **Environment Configuration**
 
-    Create a **.env** file inside the **SmartCam/** root directory
+    Create a **.env** file inside the **SmartCam/** root directory. It requires your server's IP address and the client authorization key.
     
     ```text
     # Local Network (Home Wi-Fi):
     EXPO_PUBLIC_SERVER_IP=192.168.X.Y
+
+    # Client access key (Must match APP_API_KEY on the Server)
+    EXPO_PUBLIC_APP_API_KEY=your_app_secret_key
     
     # Remote Access (Tailscale VPN):
     # EXPO_PUBLIC_SERVER_IP=100.X.Y.Z

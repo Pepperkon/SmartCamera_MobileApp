@@ -28,7 +28,7 @@ This module serves as the intelligence layer of the SmartCam system. It is respo
     
     ```text
     SERVER_URL=http://192.168.X.X:8000
-    INTERNAL_API_KEY=your_shared_secret_key
+    INTERNAL_API_KEY=your_internal_secret_key
     ```
     *(Refer to the root README for instructions on generating the `INTERNAL_API_KEY`)*
 
