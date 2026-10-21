@@ -19,7 +19,7 @@ SERVER_URL = os.environ.get("SERVER_URL")
 async def sync_known_faces(app: FastAPI) -> bool:
     async with httpx.AsyncClient() as client:
         try:
-            headers = {"X-Internal-Token": INTERNAL_API_KEY}
+            headers = {"X-Internal-Token": INTERNAL_API_KEY or ""}
             templates = await client.get(f"{SERVER_URL}/faces/templates", headers=headers)
             templates.raise_for_status()
             app.state.known_faces = [

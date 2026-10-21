@@ -4,10 +4,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "@/constants/api";
 
 const STORAGE_KEY = "@users_cache";
+const APP_API_KEY = process.env.EXPO_PUBLIC_APP_API_KEY || "";
 
 export const fetchUsers = async (): Promise<User[]> => {
   try {
-    const response = await fetch(`${API_URL}/users`);
+    const response = await fetch(`${API_URL}/users`, {
+      headers: {
+        "X-App-Token": APP_API_KEY,
+      },
+    });
     if (!response.ok) throw new Error("Problem z połączeniem");
     return await response.json();
   } catch (e) {
@@ -40,6 +45,9 @@ export const addUser = async (name: string, imageUri: string) => {
     fieldName: "file",
     httpMethod: "POST",
     uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    headers: {
+      "X-App-Token": APP_API_KEY,
+    },
     parameters: {
       name: name,
     },
@@ -58,6 +66,9 @@ export const addUserImage = async (id: string, imageUri: string) => {
     fieldName: "file",
     httpMethod: "POST",
     uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    headers: {
+      "X-App-Token": APP_API_KEY,
+    },
   });
 
   return {
@@ -72,6 +83,9 @@ export const deleteUser = async (id: string) => {
   try {
     const response = await fetch(`${API_URL}/users/${id}`, {
       method: "DELETE",
+      headers: {
+        "X-App-Token": APP_API_KEY,
+      },
     });
 
     if (!response.ok) {

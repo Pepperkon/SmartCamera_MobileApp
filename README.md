@@ -18,22 +18,37 @@ The core infrastructure (**Server**, **Model**, **Camera**, **Redis**) is design
 
 Communication between services uses standard HTTP REST endpoints and WebSockets for real-time alert dispatching.
 
-### Security Configuration (Internal API Key)
+### Security Configuration (API Keys)
 
-To prevent unauthorized execution of internal functions, the system requires a shared authorization key (Shared Secret).
+To ensure the system is secure and adheres to the principle of least privilege, the architecture uses a dual-key authorization model:
 
-**Step 1: Generate a secure key**
-Generate a long, random string using Python's built-in `secrets` module. Run this in your terminal:
+1. **Internal API Key (`INTERNAL_API_KEY`)**: Secures backend communication between the **Server**, **Model**, and **Camera**. It allows internal operations like pushing new images, synchronizing facial embeddings, and managing background tasks.
+2. **App API Key (`APP_API_KEY`)**: Secures client-facing endpoints. It is used exclusively by the **SmartCam** mobile app to fetch alerts, view users, and establish real-time WebSocket connections.
+
+**Step 1: Generate secure keys**
+Generate two distinct, long, random strings using Python's built-in `secrets` module or set your own passwords:
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
+python -c "import secrets; print(secrets.token_hex(32))"
 ```
-(Copy the generated string)
+(Copy the generated strings)
 
-**Step 2: Add the key to configuration files**
-The generated key must be identical across all modules. Add it to the `.env` files in the three main project directories (`Server/.env`, `Model/.env`, `Camera/.env`):
-```text
-INTERNAL_API_KEY=your_copied_key_here
-```
+**Step 2: Add keys to configuration files**
+Distribute the keys across the modules using .env files:
+
+  - **Server** (`Server/.env`): Needs both keys to verify all incoming traffic.
+    ```text
+    INTERNAL_API_KEY=your_first_copied_key
+    APP_API_KEY=your_second_copied_key
+    ```
+  - **Model & Camera** (`Model/.env`, `Camera/.env`): Only need the internal key.
+    ```text
+    INTERNAL_API_KEY=your_first_copied_key
+    ```
+  - **SmartCam** (`SmartCam/.env`): Only needs the app key (prefixed for Expo).
+    ```text
+    EXPO_PUBLIC_APP_API_KEY=your_second_copied_key
+    ```
 
 ---
 

@@ -28,13 +28,14 @@ This is the central hub of the SmartCam system. It manages the SQLite database, 
 
 3. **Environment Configuration**
 
-    Create a `.env` file in this directory to store your network configuration and internal security key:
+    Create a `.env` file in this directory to store your network configuration and security keys. The server requires two distinct keys to properly verify both internal and client traffic:
       
     ```text
     MODEL_URL=http://192.168.X.X:8001
-    INTERNAL_API_KEY=your_shared_secret_key
+    INTERNAL_API_KEY=your_internal_secret_key
+    APP_API_KEY=your_app_secret_key
     ```
-    *(Refer to the root README for instructions on generating the `INTERNAL_API_KEY`)*
+    *(Refer to the root README for instructions on generating both API keys)*
 
 4. **Installation**
 

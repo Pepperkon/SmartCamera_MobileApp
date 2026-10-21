@@ -3,12 +3,14 @@ import { AlertItem } from "@/constants/types";
 import { WS_URL } from "@/constants/api";
 import { saveAlertsToCache } from "@/services/alertService";
 
+const APP_API_KEY = process.env.EXPO_PUBLIC_APP_API_KEY || "";
+
 // Connects to the alerts WebSocket and directly updates the parent component's state
 export const useAlertsWebSocket = (
   setAlerts: React.Dispatch<React.SetStateAction<AlertItem[]>>,
 ) => {
   useEffect(() => {
-    const ws = new WebSocket(`${WS_URL}/ws/alerts`);
+    const ws = new WebSocket(`${WS_URL}/ws/alerts?app_api_key=${APP_API_KEY}`);
 
     ws.onopen = () => {
       console.log("🟢 Connected to WebSocket server!");

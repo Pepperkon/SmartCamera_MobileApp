@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "@/constants/api";
 
 const STORAGE_KEY = "@alerts_cache";
+const APP_API_KEY = process.env.EXPO_PUBLIC_APP_API_KEY || "";
 
 export const saveAlertsToCache = async (alerts: AlertItem[]) => {
   try {
@@ -40,6 +41,9 @@ export const deleteAlert = async (id: string) => {
   try {
     const response = await fetch(`${API_URL}/alerts/${id}`, {
       method: "DELETE",
+      headers: {
+        "X-App-Token": APP_API_KEY,
+      },
     });
 
     if (!response.ok) {
@@ -55,7 +59,11 @@ export const deleteAlert = async (id: string) => {
 
 export const fetchAlerts = async (): Promise<AlertItem[]> => {
   try {
-    const response = await fetch(`${API_URL}/alerts`);
+    const response = await fetch(`${API_URL}/alerts`, {
+      headers: {
+      "X-App-Token": APP_API_KEY,
+      },
+    });
     if (!response.ok) throw new Error("Problem z połączeniem");
     return await response.json();
   } catch (error) {
@@ -68,6 +76,9 @@ export const markAsReadOnServer = async (id: string) => {
   try {
     await fetch(`${API_URL}/alerts/${id}/read`, {
       method: "POST",
+      headers: {
+        "X-App-Token": APP_API_KEY,
+      },
     });
   } catch {
     console.error("Nie udało się zaktualizować statusu na serwerze");
