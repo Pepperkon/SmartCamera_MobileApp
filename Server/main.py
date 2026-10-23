@@ -78,7 +78,8 @@ manager = ConnectionManager()
 if not MODEL_URL:
     raise RuntimeError("MODEL_URL not found, check README for instructions")
 
-redis = Redis(host="localhost", port=6379)
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+redis = Redis(host=REDIS_HOST, port=6379)
 
 
 async def cleanup_alerts(interval_seconds: int, max_age_hours: int) -> None:
@@ -129,7 +130,7 @@ async def lifespan(app: FastAPI):
     os.makedirs("data/images/captured", exist_ok=True)
     task = asyncio.create_task(cleanup_alerts(interval_seconds=60, max_age_hours=1))
 
-    redis_pool = await create_pool(RedisSettings())
+    redis_pool = await create_pool(RedisSettings(host=REDIS_HOST))
     app.state.redis_pool = redis_pool
     # --- POPRAWKA: Dodajemy timeout na odczyt (np. 30 sekund) ---
     # Możesz też zaimportować httpx i użyć httpx.Timeout(30.0),

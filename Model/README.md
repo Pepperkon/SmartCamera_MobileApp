@@ -1,9 +1,11 @@
 # Model
 This module serves as the intelligence layer of the SmartCam system. It is responsible for processing images, detecting faces, and performing biometric matching using deep learning embeddings.
 
+> **Note:** The recommended and easiest way to run this module is using **Docker** from the root directory of the project. Please refer to the [Root README](../README.md) for the Quick Start guide. The instructions below are for **native development only**.
+
 ---
 
-## Getting Started
+## Native Developer Setup
 
 1. **Prerequisites**
     - **Python 3.13+**
@@ -13,7 +15,7 @@ This module serves as the intelligence layer of the SmartCam system. It is respo
 
 2. **System Dependencies**
     
-    Before installing Python packages, ensure your system has the necessary build tools:
+    Before installing Python packages natively, ensure your system has the necessary build tools:
     - **Ubuntu/Raspberry Pi OS**:
         ```bash
         sudo apt install cmake g++ build-essential
@@ -24,17 +26,16 @@ This module serves as the intelligence layer of the SmartCam system. It is respo
         ```
 3. **Environment Configuration**
 
-    Create a `.env` file in this directory to store your network configuration and internal security key:
+    Create a `.env` file **in this directory** (if running natively) to store your network configuration and internal security key:
     
     ```text
-    SERVER_URL=http://192.168.X.X:8000
+    SERVER_URL=http://192.168.X.Y:8000
     INTERNAL_API_KEY=your_shared_secret_key
     ```
-    *(Refer to the root README for instructions on generating the `INTERNAL_API_KEY`)*
 
 4. **Installation**
 
-    Using ```uv```, you can install all dependencies and set up the virtual environment with a single command:
+    Using `uv`, you can install all dependencies and set up the virtual environment with a single command:
     ```bash
     uv sync
     ```
