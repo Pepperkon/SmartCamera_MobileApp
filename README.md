@@ -154,31 +154,30 @@ If you plan to heavily modify the Python code, attach debuggers, or prefer not t
   - Mobile app (`SmartCam`): Checked with ESLint and TypeScript (`tsc`).
 
 1. **Initial Setup (One-Time)**
-Run these commands from the **root directory** of the repository:
+   Run these commands from the **root directory** of the repository:
 
-```bash
-# 1. Sync the root Python environment
-uv sync
+   ```bash
+   # 1. Sync the root Python environment
+   uv sync
 
-# 2. Install pre-commit Git hooks
-uv run pre-commit install
-```
+   # 2. Install pre-commit Git hooks
+   uv run pre-commit install
+   ```
 
 2. **Workflow & Pre-commit Hooks**
-Once installed, `pre-commit` automatically runs before every git commit to format and check your Python code. You can also run all checks manually on the entire monorepo at any time:
-```bash
-uv run pre-commit run --all-files
-```
+   Once installed, `pre-commit` automatically runs before every git commit to format and check your Python code. You can also run all checks manually on the entire monorepo at any time:
+   ```bash
+   uv run pre-commit run --all-files
+   ```
 
 3. **CI Pipeline**
-- **Continuous Integration (CI)**: Every push and Pull Request triggers GitHub Actions to ensure code integrity (Ruff formatting/linting, Bandit security analysis, `pip-audit`, and ESLint/TypeScript checks).
-
+   - **Continuous Integration (CI)**: Every push and Pull Request triggers GitHub Actions to ensure code integrity (Ruff formatting/linting, Bandit security analysis, `pip-audit`, and ESLint/TypeScript checks).
 
 4. **Running Natively**
-Each component contains its own **README.md** with specific installation instructions for native deployment. To start the entire system natively, follow these steps in order:
-1. Start **Redis** server locally.
-2. Configure `.env` files in each directory.
-3. Start **Server** (`main.py` and `worker.py`).
-4. Start **Model** (`model.py`).
-5. Launch **Smartcam** and open it on your phone.
-6. Run the **Camera** script (`simulation.py` or `movement_det.py`).
+   Each component contains its own **README.md** with specific installation instructions for native deployment. To start the entire system natively, follow these steps in order:
+   1. Start **Redis** server locally.
+   2. Configure `.env` files in each directory.
+   3. Start **Server** (`main.py` and `worker.py`).
+   4. Start **Model** (`model.py`).
+   5. Launch **Smartcam** and open it on your phone.
+   6. Run the **Camera** script (`simulation.py` or `movement_det.py`).
