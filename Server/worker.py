@@ -22,13 +22,15 @@ from services import (
     notify_model_sync,
 )
 
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+
 
 async def startup(ctx: dict) -> None:
     # creating an HTTP client for communication with Model and Server modules
     ctx["client"] = httpx.AsyncClient(timeout=30.0)
     load_dotenv()
     ctx["model_url"] = os.environ.get("MODEL_URL")
-    ctx["redis"] = Redis(host="localhost", port=6379)
+    ctx["redis"] = Redis(host=REDIS_HOST, port=6379)
 
 
 async def shutdown(ctx):
@@ -166,7 +168,7 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
 async def start_worker():
     worker = Worker(
         functions=[process_image_worker],
-        redis_settings=RedisSettings(host="localhost", port=6379),
+        redis_settings=RedisSettings(host=REDIS_HOST, port=6379),
         on_startup=startup,
         on_shutdown=shutdown,
         max_jobs=1,

@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  server-api:
+    build: ./Server
+    image: smartcam-server
+    command: ["python", "main.py"]
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - server_data:/app/data
+    environment:
+      - REDIS_HOST=redis
+      - MODEL_URL=${MODEL_URL:-http://model:8001}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+    depends_on:
+      - redis
+
+  server-worker:
+    build: ./Server
+    image: smartcam-server
+    command: ["python", "worker.py"]
+    restart: unless-stopped
+    volumes:
+      - server_data:/app/data
+    environment:
+      - REDIS_HOST=redis
+      - MODEL_URL=${MODEL_URL:-http://model:8001}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+    depends_on:
+      - redis
+
+  model:
+    build: ./Model
+    image: smartcam-model
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - SERVER_URL=${SERVER_URL:-http://server-api:8000}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+
+  camera-sim:
+    build: ./Camera
+    image: smartcam-camera
+    command: ["python", "simulation.py"]
+    profiles: ["sim"]
+    environment:
+      - SERVER_URL=${SERVER_URL:-http://server-api:8000}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+    volumes:
+      - ./Camera/test_images:/app/test_images
+    depends_on:
+      - server-api
+
+  camera-pi:
+    build: ./Camera
+    image: smartcam-camera
+    command: ["python", "movement_det.py"]
+    profiles: ["pi"]
+    environment:
+      - SERVER_URL=${SERVER_URL:-http://server-api:8000}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+    privileged: true
+    volumes:
+      - /dev:/dev
+    depends_on:
+      - server-api
+
+volumes:
+  server_data:
