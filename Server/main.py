@@ -194,7 +194,7 @@ async def get_faces_templates(
 # Displaying users in the mobile app
 @app.get("/users", response_model=list[UserRead])
 async def get_users(
-    is_temporary: bool = False,
+    is_temporary: bool = Query(default=False, description="Filter by temporary status"),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
@@ -203,8 +203,8 @@ async def get_users(
     statement = (
         select(User)
         .options(
-            selectinload(User.images),  # type: ignore
-            selectinload(User.alerts),  # type: ignore
+            selectinload(User.images),
+            selectinload(User.alerts),
         )
         .where(User.is_temporary == is_temporary)
         .order_by(col(User.name))

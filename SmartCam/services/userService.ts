@@ -3,11 +3,16 @@ import { User } from "@/constants/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "@/constants/api";
 
-const STORAGE_KEY = "@users_cache";
+const getStorageKey = (isTemporary: boolean) =>
+  isTemporary ? "@users_cache_temporary" : "@users_cache_trusted";
 
-export const fetchUsers = async (): Promise<User[]> => {
+export const fetchUsers = async (
+  isTemporary: boolean = false,
+): Promise<User[]> => {
   try {
-    const response = await fetch(`${API_URL}/users`);
+    const response = await fetch(
+      `${API_URL}/users?is_temporary=${isTemporary}`,
+    );
     if (!response.ok) throw new Error("Problem z połączeniem");
     return await response.json();
   } catch (e) {
@@ -16,34 +21,45 @@ export const fetchUsers = async (): Promise<User[]> => {
   }
 };
 
-export const saveUsersToCache = async (users: User[]) => {
+export const saveUsersToCache = async (
+  users: User[],
+  isTemporary: boolean = false,
+) => {
   try {
+    const key = getStorageKey(isTemporary);
     const jsonValue = JSON.stringify(users);
-    await AsyncStorage.setItem(STORAGE_KEY, jsonValue);
+    await AsyncStorage.setItem(key, jsonValue);
   } catch (e) {
     console.log("Cache error:", e);
   }
 };
 
-export const getUsersFromCache = async (): Promise<User[] | null> => {
+export const getUsersFromCache = async (
+  isTemporary: boolean = false,
+): Promise<User[] | null> => {
   try {
-    const jsonValue = await AsyncStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(isTemporary);
+    const jsonValue = await AsyncStorage.getItem(key);
     return jsonValue != null ? JSON.parse(jsonValue) : null;
   } catch (e) {
-    console.log("Cahce error:", e);
+    console.log("Cache error:", e);
     return null;
   }
 };
 
 export const addUser = async (name: string, imageUri: string) => {
-  const uploadResult = await FileSystem.uploadAsync(`${API_URL}/users`, imageUri, {
-    fieldName: "file",
-    httpMethod: "POST",
-    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-    parameters: {
-      name: name,
+  const uploadResult = await FileSystem.uploadAsync(
+    `${API_URL}/users`,
+    imageUri,
+    {
+      fieldName: "file",
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      parameters: {
+        name: name,
+      },
     },
-  });
+  );
 
   return {
     ok: uploadResult.status >= 200 && uploadResult.status < 300,
@@ -54,11 +70,15 @@ export const addUser = async (name: string, imageUri: string) => {
 };
 
 export const addUserImage = async (id: string, imageUri: string) => {
-  const uploadResult = await FileSystem.uploadAsync(`${API_URL}/users/${id}/images`, imageUri, {
-    fieldName: "file",
-    httpMethod: "POST",
-    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-  });
+  const uploadResult = await FileSystem.uploadAsync(
+    `${API_URL}/users/${id}/images`,
+    imageUri,
+    {
+      fieldName: "file",
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    },
+  );
 
   return {
     ok: uploadResult.status >= 200 && uploadResult.status < 300,
@@ -87,13 +107,20 @@ export const deleteUser = async (id: string) => {
 
 export const deleteUserFromCache = async (id: string) => {
   try {
-    const currentUsers = await getUsersFromCache();
-    if (currentUsers) {
-      const updatedUsers = currentUsers.filter(
+    const trustedUsers = await getUsersFromCache(false);
+    if (trustedUsers) {
+      const updatedTrusted = trustedUsers.filter(
         (user) => String(user.id) !== String(id),
       );
-      await saveUsersToCache(updatedUsers);
-      return updatedUsers;
+      await saveUsersToCache(updatedTrusted, false);
+    }
+
+    const temporaryUsers = await getUsersFromCache(true);
+    if (temporaryUsers) {
+      const updatedTemporary = temporaryUsers.filter(
+        (user) => String(user.id) !== String(id),
+      );
+      await saveUsersToCache(updatedTemporary, true);
     }
   } catch (e) {
     throw e;
