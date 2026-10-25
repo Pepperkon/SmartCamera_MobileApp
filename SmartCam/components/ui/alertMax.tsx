@@ -8,7 +8,14 @@ import {
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+} from "react-native";
 import CircleButton from "./circleButton";
 import NotificationMark from "./notificationMark";
 import { API_URL } from "@/constants/api";
@@ -68,7 +75,7 @@ function AlertMax() {
             },
             (error) => {
               console.error("Error retrieving photo size:", error);
-            }
+            },
           );
         }
       }
@@ -105,34 +112,34 @@ function AlertMax() {
   const [prefix, name] = alert.title ? alert.title.split(": ") : ["", ""];
 
   const renderBoundingBox = () => {
-      if (!alert.location || alert.location.length !== 4 || !imgDimensions) {
-        return null;
-      }
+    if (!alert.location || alert.location.length !== 4 || !imgDimensions) {
+      return null;
+    }
 
-      const [rawTop, rawRight, rawBottom, rawLeft] = alert.location;
-      const { width: origW, height: origH } = imgDimensions;
+    const [rawTop, rawRight, rawBottom, rawLeft] = alert.location;
+    const { width: origW, height: origH } = imgDimensions;
 
-      const faceWidth = rawRight - rawLeft;
-      const faceHeight = rawBottom - rawTop;
+    const faceWidth = rawRight - rawLeft;
+    const faceHeight = rawBottom - rawTop;
 
-      const padX = faceWidth * 0.2;
-      const padY = faceHeight * 0.2;
+    const padX = faceWidth * 0.2;
+    const padY = faceHeight * 0.2;
 
-      const top = Math.max(0, rawTop - padY);
-      const bottom = Math.min(origH, rawBottom + padY);
-      const left = Math.max(0, rawLeft - padX);
-      const right = Math.min(origW, rawRight + padX);
+    const top = Math.max(0, rawTop - padY);
+    const bottom = Math.min(origH, rawBottom + padY);
+    const left = Math.max(0, rawLeft - padX);
+    const right = Math.min(origW, rawRight + padX);
 
-      const boxStyle = {
-        top: `${(top / origH) * 100}%` as const,
-        left: `${(left / origW) * 100}%` as const,
-        width: `${((right - left) / origW) * 100}%` as const,
-        height: `${((bottom - top) / origH) * 100}%` as const,
-        borderColor: getBoundingBoxColor(alert.title),
-      };
-
-      return <View style={[styles.boundingBox, boxStyle]} />;
+    const boxStyle = {
+      top: `${(top / origH) * 100}%` as const,
+      left: `${(left / origW) * 100}%` as const,
+      width: `${((right - left) / origW) * 100}%` as const,
+      height: `${((bottom - top) / origH) * 100}%` as const,
+      borderColor: getBoundingBoxColor(alert.title),
     };
+
+    return <View style={[styles.boundingBox, boxStyle]} />;
+  };
 
   const containerAspectRatio =
     imgDimensions && imgDimensions.height > 0
@@ -140,55 +147,73 @@ function AlertMax() {
       : 16 / 9;
 
   return (
-    <View style={styles.container}>
-      <Text style={GlobalStyles.text_primary}>{prefix}</Text>
-      <Text style={GlobalStyles.text_primary}>{name}</Text>
-      <View style={styles.row_container}>
-        <Text style={GlobalStyles.text_secondary}>{alert.time}</Text>
-        <Text style={GlobalStyles.text_secondary}>{alert.date}</Text>
-      </View>
-
-      <Text
-        style={[
-          GlobalStyles.text_secondary,
-          { color: getConfidenceColor(alert.confidence), marginTop: 5 },
-        ]}
-      >
-        Confidence: {Math.round(alert.confidence)}%
-      </Text>
-
-      <View style={[styles.imageWrapper, { aspectRatio: containerAspectRatio }]}>
-        <Image
-          source={imageSource}
-          style={styles.image}
-          resizeMode="stretch"
-        />
-        {renderBoundingBox()}
-      </View>
-
-      <View style={styles.button_container}>
-        <CircleButton iconName="delete" onPress={handleDelete} />
-        <CircleButton iconName="download" />
-      </View>
-
+    <View style={styles.mainWrapper}>
       {alert.isNew && (
         <View style={GlobalStyles.mark}>
           <NotificationMark />
         </View>
       )}
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={{ alignItems: "center" }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={GlobalStyles.text_primary}>{prefix}</Text>
+        <Text style={GlobalStyles.text_primary}>{name}</Text>
+        <View style={styles.row_container}>
+          <Text style={GlobalStyles.text_secondary}>{alert.time}</Text>
+          <Text style={GlobalStyles.text_secondary}>{alert.date}</Text>
+        </View>
+
+        <Text
+          style={[
+            GlobalStyles.text_secondary,
+            { color: getConfidenceColor(alert.confidence), marginTop: 5 },
+          ]}
+        >
+          Confidence: {Math.round(alert.confidence)}%
+        </Text>
+
+        <View style={[styles.imageWrapper, { height: 350 }]}>
+          <Image source={imageSource} style={styles.image} resizeMode="cover" />
+          {renderBoundingBox()}
+        </View>
+
+        <View style={styles.button_container}>
+          <CircleButton iconName="delete" onPress={handleDelete} />
+          <CircleButton iconName="download" />
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  mainWrapper: {
+    flex: 1,
+    width: "95%",
+    position: "relative",
+    overflow: "visible",
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.primary,
-    height: "80%",
+    height: "100%",
     width: "95%",
     borderRadius: 20,
     alignItems: "center",
     paddingTop: SPACING.xl,
+  },
+  scrollContainer: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderRadius: 20,
+  },
+  contentContainer: {
+    flexGrow: 1,
+    alignItems: "center",
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.xl,
   },
   button_container: {
     width: "70%",

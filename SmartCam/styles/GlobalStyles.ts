@@ -78,6 +78,7 @@ export const GlobalStyles = StyleSheet.create({
     position: "absolute",
     top: -8,
     right: -8,
-    zIndex: 1,
+    zIndex: 999,
+    elevation: 999,
   },
 });
