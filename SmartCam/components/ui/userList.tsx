@@ -10,15 +10,21 @@ import { ActivityIndicator, FlatList, StyleSheet } from "react-native";
 import UserEntry from "./userEntry";
 import { useFocusEffect } from "expo-router/react-navigation";
 
-function UserList() {
+interface Props {
+  isTrustedView: boolean;
+}
+
+function UserList({ isTrustedView }: Props) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
 
   const syncWithCache = async () => {
-    const cachedData = await getUsersFromCache();
+    const cachedData = await getUsersFromCache(!isTrustedView);
     if (cachedData) {
       setUsers(cachedData);
+    } else {
+      setUsers([]);
     }
     setLoading(false);
   };
@@ -26,8 +32,8 @@ function UserList() {
   const loadData = async (forceRefresh = false) => {
     if (forceRefresh) setRefreshing(true);
 
-    const freshData = await fetchUsers();
-    await saveUsersToCache(freshData);
+    const freshData = await fetchUsers(!isTrustedView);
+    await saveUsersToCache(freshData, !isTrustedView);
 
     setUsers(freshData);
     setLoading(false);
@@ -42,7 +48,7 @@ function UserList() {
     useCallback(() => {
       syncWithCache();
       loadData();
-    }, []),
+    }, [isTrustedView]),
   );
 
   if (loading) {

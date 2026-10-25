@@ -4,7 +4,7 @@ import { ImageSourcePropType } from "react-native";
 export interface AlertItem {
   id: string;
   title: string;
-  image: ImageSourcePropType; // Obsłuży zarówno require(...), jak i { uri: '...' }
+  image: ImageSourcePropType;
   time: string;
   date?: string;
   isNew: boolean;
