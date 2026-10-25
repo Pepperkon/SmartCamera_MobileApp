@@ -12,32 +12,94 @@ Mobile application designed for an intelligent monitoring system
 
 ---
 
-## Network & Communication
+## Quick Start (Docker)
 
-The core infrastructure (**Server**, **Model**, **Camera**, **Redis**) is designed to run locally within the same **Home LAN** network for low latency and security.
+The easiest and recommended way to run the entire backend infrastructure (Server, Model, Camera, and Redis) is using **Docker**.
 
-Communication between services uses standard HTTP REST endpoints and WebSockets for real-time alert dispatching.
+### 1. Prerequisites
+- [Docker](https://docs.docker.com/get-docker/) and Docker Compose installed on your machine.
+- Node.js (for running the SmartCam mobile app).
 
-### Security Configuration (Internal API Key)
+### 2. Security Configuration (Single `.env` file)
 
-To prevent unauthorized execution of internal functions, the system requires a shared authorization key (Shared Secret).
+  To prevent unauthorized execution of internal functions, the system requires a shared authorization key.
+  
+  **Step 1: Generate a secure key**
+  Generate a long, random string using Python's built-in `secrets` module. Run this in your terminal:
+  ```bash
+  python -c "import secrets; print(secrets.token_hex(32))"
+  ```
+  (*Copy the generated string*)
+  
+  **Step 2: Create a single `.env` file in the root directory of the project and add your key:**
+  ```text
+  INTERNAL_API_KEY=your_copied_key_here
+  ```
 
-**Step 1: Generate a secure key**
-Generate a long, random string using Python's built-in `secrets` module. Run this in your terminal:
-```bash
-python -c "import secrets; print(secrets.token_hex(32))"
-```
-(Copy the generated string)
+### 3. Run the Backend System
 
-**Step 2: Add the key to configuration files**
-The generated key must be identical across all modules. Add it to the `.env` files in the three main project directories (`Server/.env`, `Model/.env`, `Camera/.env`):
-```text
-INTERNAL_API_KEY=your_copied_key_here
-```
+Open your terminal in the root directory and choose one of the profiles below:
+
+  - **Option A: Simulation Mode (For PC/Mac/Linux testing)**
+
+    Runs the server, model, and a simulated camera that continuously picks random images from the `Camera/test_images` directory.
+      
+    ```bash
+    docker compose --profile sim up -d
+    ```
+      
+    (*Note: If you change Python source files, append `--build` to the command to rebuild the images*).
+
+  - **Option B: Production Mode (For Raspberry Pi)**
+
+    Runs the server, model, and the actual physical camera script using GPIO and `rpicam-apps`.
+      
+    ```bash
+    docker compose --profile pi up -d
+    ```
+
+### 4. Useful Docker Commands
+
+  - **View live logs:** `docker compose --profile sim logs -f`
+  
+  - **Stop safely:** `docker compose --profile sim down` (keeps your database and saved images)
+  
+  - **Hard reset:** `docker compose --profile sim down -v` (wipes the database and all captured images)
+
+
+### 5. Launch the Mobile App
+
+The backend is now running. To start the user interface, follow the instructions in the [SmartCam/README.md](SmartCam/README.md).
+  
+---
+
+### Multi-Device Deployment (Docker)
+
+If you want to run the system across multiple devices (e.g., Server on a PC, Camera on a Raspberry Pi), you can use the exact same `docker-compose.yml` file.
+
+  1. Copy the project repository to all devices.
+  2. Update the `.env` file on all devices to include the local IP addresses of the Server and Model hosts:
+
+      ```text
+      INTERNAL_API_KEY=your_copied_key_here
+      SERVER_URL=http://192.168.X.Y:8000
+      MODEL_URL=http://192.168.X.Y:8001
+      ```
+
+  3. Run only the specific services you need on each device:
+
+      - On the Server PC: `docker compose up -d redis server-api server-worker`
+      - On the AI PC: `docker compose up -d model`
+      - On the Raspberry Pi: `docker compose --profile pi up -d camera-pi`
+
 
 ---
 
-### Accessing Your SmartCam from Outside (Remote Access)
+### Network, Communication & Remote Access
+
+The core infrastructure is designed to run locally within the same **Home LAN** network for low latency and security. Communication between services uses standard HTTP REST endpoints and WebSockets for real-time alert dispatching.
+
+#### Accessing Your SmartCam from Outside (Remote Access)
 
 If you want to monitor your home and receive alerts on your phone while away (e.g., from work or cellular data), the recommended and most secure solution is **[Tailscale](https://tailscale.com/)** (a zero-config WireGuard mesh VPN). This avoids dangerous port forwarding on your home router.
 
@@ -47,65 +109,14 @@ If you want to monitor your home and receive alerts on your phone while away (e.
 1. Install **Tailscale** on the machine running the **Server** (PC/Raspberry Pi) and on your **Mobile Phone**.
 2. Log into the same Tailscale account on both devices.
 3. Note the Tailscale IP assigned to your server host (e.g., `100.x.y.z`).
-4. Point your mobile application to this Tailscale IP. All backend traffic and WebSocket streams will securely route straight to your home system.
-
-> Detailed steps for running the mobile app with Tailscale are described in the [`SmartCam/README.md`](./SmartCam/README.md).
+4. Point your mobile application (in `SmartCam/.env`) to this Tailscale IP. All backend traffic and WebSocket streams will securely route straight to your home system.
 
 ---
 
-## Developer Setup & Quality Standards
-
-This project uses modern tooling for code quality and automated CI checks:
-
-- **Python modules (`Camera`, `Model`, `Server`)**: Managed with [`uv`](https://docs.astral.sh/uv/), formatted and linted with **Ruff**, and checked with **Bandit** and `pip-audit`.
-- **Mobile app (`SmartCam`)**: Checked with **ESLint** and **TypeScript (`tsc`)**.
-
-### 1. Prerequisites
-- [uv](https://docs.astral.sh/uv/) (Python package & environment manager)
-- [Node.js](https://nodejs.org/) (v20+ or v24+) & npm
-
-### 2. Initial Setup (One-Time)
-Run these commands from the **root directory** of the repository:
-
-```bash
-# 1. Sync the root Python environment
-uv sync
-
-# 2. Install pre-commit Git hooks
-uv run pre-commit install
-```
-
-### 3. Workflow & Pre-commit Hooks
-Once installed, `pre-commit` automatically runs before every git commit to format and check your Python code:
-- If files need formatting, `ruff` reformats them automatically and marks the hook as failed. Stage the changes (`git add .`) and commit again.
-- If errors remain, inspect the line numbers printed in the terminal.
-
-You can also run all checks manually on the entire monorepo at any time:
-```bash
-uv run pre-commit run --all-files
-```
-
-### 4. CI Pipeline
-Every push and Pull Request triggers GitHub Actions to ensure code integrity:
-- Python Matrix Checks: Ruff formatting (`--check`), Ruff linting, Bandit security analysis, and `pip-audit` for dependency vulnerabilities.
-- SmartCam Checks: `tsc --noEmit` (type checking) and `eslint`.
-
----
-
-## Getting Started
-Each component contains its own **README.md** with specific installation instructions. To start the entire system, follow these steps in order:
-1. Start **Redis** server
-2. Configure and start **Server**
-2. Configure and start **Model**
-3. Launch **Smartcam** and open it on your phone
-4. Run the **Camera** script to begin sending images for analysis
-
----
-
-## Windows/WSL Setup
+### Windows/WSL Setup
 Communication between devices is often blocked by system security layers.
 
-### WSL
+#### WSL
 To ensure WSL uses the same IP address as your Windows host, create or edit the file `C:\Users\user\.wslconfig`:
 ```text
 [wsl2]
@@ -113,7 +124,7 @@ networkingMode=Mirrored
 ```
 Then, restart WSL.
 
-### Firewall
+#### Firewall
 Run PowerShell **as Administrator** and execute the following commands to open the necessary ports (open only the ones that you need):
 ```bash
 # Allow traffic for Server
@@ -133,3 +144,40 @@ If you later would want to remove these rules you can do it like this:
 ```bash
 Remove-NetFirewallRule -DisplayName "name"
 ```
+
+---
+
+## Native Developer Setup & Quality Standards
+
+If you plan to heavily modify the Python code, attach debuggers, or prefer not to use Docker, you can run the services natively. This project uses modern tooling for code quality and automated CI/CD checks.
+  - Python modules (`Camera`, `Model`, `Server`): Managed with uv, formatted and linted with Ruff, and checked with Bandit and `pip-audit`.
+  - Mobile app (`SmartCam`): Checked with ESLint and TypeScript (`tsc`).
+
+1. **Initial Setup (One-Time)**
+   Run these commands from the **root directory** of the repository:
+
+   ```bash
+   # 1. Sync the root Python environment
+   uv sync
+
+   # 2. Install pre-commit Git hooks
+   uv run pre-commit install
+   ```
+
+2. **Workflow & Pre-commit Hooks**
+   Once installed, `pre-commit` automatically runs before every git commit to format and check your Python code. You can also run all checks manually on the entire monorepo at any time:
+   ```bash
+   uv run pre-commit run --all-files
+   ```
+
+3. **CI Pipeline**
+   - **Continuous Integration (CI)**: Every push and Pull Request triggers GitHub Actions to ensure code integrity (Ruff formatting/linting, Bandit security analysis, `pip-audit`, and ESLint/TypeScript checks).
+
+4. **Running Natively**
+   Each component contains its own **README.md** with specific installation instructions for native deployment. To start the entire system natively, follow these steps in order:
+   1. Start **Redis** server locally.
+   2. Configure `.env` files in each directory.
+   3. Start **Server** (`main.py` and `worker.py`).
+   4. Start **Model** (`model.py`).
+   5. Launch **Smartcam** and open it on your phone.
+   6. Run the **Camera** script (`simulation.py` or `movement_det.py`).

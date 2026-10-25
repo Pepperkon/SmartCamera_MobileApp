@@ -1,9 +1,11 @@
 # Camera
 This module is responsible for the physical interface with the camera and motion detection. It captures high-quality images triggered by a PIR sensor and streams them directly to the central Server for further processing.
 
+> **Note:** The recommended and easiest way to run this module is using **Docker** from the root directory of the project. Please refer to the [Root README](../README.md) for the Quick Start guide. The instructions below are for **native development only**.
+
 ---
 
-## Getting Started
+## Native Developer Setup
 
 1. **Prerequisites**
     - Python 3.13+
@@ -12,17 +14,16 @@ This module is responsible for the physical interface with the camera and motion
 
 2. **Environment Configuration**
 
-    Create a `.env` file in this directory to store your network configuration and internal security key:
+    Create a `.env` file **in this directory** (if running natively) to store your network configuration and internal security key:
     
     ```text
-    SERVER_URL=http://192.168.X.X:8000
+    SERVER_URL=http://192.168.X.Y:8000
     INTERNAL_API_KEY=your_shared_secret_key
     ```
-    *(Refer to the root README for instructions on generating the `INTERNAL_API_KEY`)*
 
 3. **Installation**
 
-    Using ```uv```, you can install all dependencies and set up the virtual environment with a single command:
+    Using `uv`, you can install all dependencies and set up the virtual environment with a single command:
     ```bash
     uv sync
     ```
@@ -39,7 +40,7 @@ This module is responsible for the physical interface with the camera and motion
 
 5. **Running the simulation**
 
-    Instead of using physical hardware, you can run the **simulation.py** script. It iterates through images in the **test_images** directory and sends them to the server as if they were just captured:
+    Instead of using physical hardware, you can run the **simulation.py** script. It continuously monitors the **test_images** directory and picks a random image every 20 seconds, sending it to the server to simulate motion detection:
     ```bash
     uv run simulation.py
     ```
