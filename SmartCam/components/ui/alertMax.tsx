@@ -174,8 +174,17 @@ function AlertMax() {
           Confidence: {Math.round(alert.confidence)}%
         </Text>
 
-        <View style={[styles.imageWrapper, { height: 350 }]}>
-          <Image source={imageSource} style={styles.image} resizeMode="cover" />
+        <View
+          style={[
+            styles.imageWrapper,
+            { aspectRatio: containerAspectRatio },
+          ]}
+        >
+          <Image
+            source={imageSource}
+            style={styles.image}
+            resizeMode="contain"
+          />
           {renderBoundingBox()}
         </View>
 
