@@ -7,16 +7,14 @@ import {
   Pressable,
   FlatList,
   Dimensions,
-  StyleSheet
+  StyleSheet,
+  Alert,
 } from "react-native";
 import React, { useCallback, useState } from "react";
 import { COLORS, SPACING } from "@/constants/theme";
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import {
-  deleteUser,
-  deleteUserFromCache,
-} from "@/services/userService";
+import { deleteUser, deleteUserFromCache } from "@/services/userService";
 import { User } from "@/constants/types";
 import { API_URL } from "@/constants/api";
 import CircleButton from "./circleButton";
@@ -30,12 +28,28 @@ function UserMax() {
   const [loading, setLoading] = useState(true);
   const [isGalleryVisble, setGalleryVisible] = useState(false);
 
-  const handleDelete = async () => {
-    if (typeof id == "string") {
-      await deleteUser(id);
-      await deleteUserFromCache(id);
-      router.back();
-    }
+  const handleDelete = (userName: string) => {
+    Alert.alert(
+      "Removing User",
+      `Are you sure you want to remove user ${userName}?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            if (typeof id === "string") {
+              await deleteUser(id);
+              await deleteUserFromCache(id);
+              router.back();
+            }
+          },
+        },
+      ],
+    );
   };
 
   const addImage = () => {
@@ -92,7 +106,10 @@ function UserMax() {
       </Pressable>
 
       <View style={styles.button_container}>
-        <CircleButton iconName="delete" onPress={handleDelete} />
+        <CircleButton
+          iconName="delete"
+          onPress={() => handleDelete(user.name)}
+        />
         <CircleButton iconName="download" />
       </View>
       <View style={styles.button_container}>
