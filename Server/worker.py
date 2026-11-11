@@ -129,11 +129,7 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
                 await add_user_image_logic(user_id, img_bytes, res["encoding"], session)
                 new_template_added = True
 
-            distance = res.get("distance")
-            if distance is not None:
-                confidence = max(0.0, 1 - distance) * 100
-            else:
-                confidence = 0.0
+            confidence = round(res.get("confidence", 0.0) * 100, 2)
 
             new_alert = Alert(
                 title=title,
@@ -150,16 +146,19 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
             await session.commit()
             await session.refresh(new_alert)
 
-            alert_dict = AlertRead.model_validate(new_alert).model_dump()
-
+            alert_dict = AlertRead.model_validate(new_alert).model_dump(mode="json")
+            server_broadcast_url = os.environ.get("SERVER_URL", "http://server-api:8000")
             try:
                 await client.post(
-                    "http://localhost:8000/internal/broadcast",
+                    f"{server_broadcast_url}/internal/broadcast",
                     json={"type": "new_alert", "alert": alert_dict},
                     headers=headers,
+                    timeout=5.0,
                 )
             except httpx.HTTPError as e:
-                print(f"[WORKER] Communication error with FastAPI during broadcast: {e}")
+                print(
+                    f"[WORKER] Communication error with FastAPI during broadcast to {server_broadcast_url}: {e}"
+                )
 
         if new_template_added:
             await notify_model_sync(model_url, client)
