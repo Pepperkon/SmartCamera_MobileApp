@@ -23,6 +23,7 @@ from services import (
 )
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8000")
 
 
 async def startup(ctx: dict) -> None:
@@ -154,7 +155,7 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
 
             try:
                 await client.post(
-                    "http://localhost:8000/internal/broadcast",
+                    f"{SERVER_URL}/internal/broadcast",
                     json={"type": "new_alert", "alert": alert_dict},
                     headers=headers,
                 )

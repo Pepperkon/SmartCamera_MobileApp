@@ -1,5 +1,10 @@
 import { Stack } from "expo-router";
+import { PushNotificationsProvider } from "../providers/PushNotificationsProvider";
 
 export default function RootLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <PushNotificationsProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </PushNotificationsProvider>
+  );
 }
