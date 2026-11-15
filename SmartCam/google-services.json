@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "701795453713",
+    "project_id": "smartcam-7f01e",
+    "storage_bucket": "smartcam-7f01e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:701795453713:android:4545c4696b93dafa78dab0",
+        "android_client_info": {
+          "package_name": "com.pepperkon.smartcam"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDK7GydNfGTejQrpzVKgS6ylj3RQKBaQmU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
