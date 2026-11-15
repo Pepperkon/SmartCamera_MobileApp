@@ -2,14 +2,14 @@ services:
   redis:
     image: redis:alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    profiles: ["sim", "pi", "server", "all"]
 
   server-api:
     build: ./Server
     image: smartcam-server
     command: ["python", "main.py"]
     restart: unless-stopped
+    profiles: ["sim", "pi", "server", "all"]
     ports:
       - "8000:8000"
     volumes:
@@ -26,10 +26,12 @@ services:
     image: smartcam-server
     command: ["python", "worker.py"]
     restart: unless-stopped
+    profiles: ["sim", "pi", "server", "all"]
     volumes:
       - server_data:/app/data
     environment:
       - REDIS_HOST=redis
+      - SERVER_URL=http://server-api:8000
       - MODEL_URL=${MODEL_URL:-http://model:8001}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     depends_on:
@@ -39,6 +41,7 @@ services:
     build: ./Model
     image: smartcam-model
     restart: unless-stopped
+    profiles: ["sim", "pi", "model", "all"]
     ports:
       - "8001:8001"
     environment:
@@ -62,15 +65,14 @@ services:
     build: ./Camera
     image: smartcam-camera
     command: ["python", "movement_det.py"]
-    profiles: ["pi"]
-    environment:
-      - SERVER_URL=${SERVER_URL:-http://server-api:8000}
-      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+    profiles: ["pi", "camera"]
     privileged: true
     volumes:
       - /dev:/dev
-    depends_on:
-      - server-api
+    environment:
+      - SERVER_URL=${SERVER_URL:-http://server-api:8000}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - CAMERA_NAME=${CAMERA_NAME:-Front_Door}
 
 volumes:
   server_data:

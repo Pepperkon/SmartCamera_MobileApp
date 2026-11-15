@@ -7,7 +7,7 @@ from fastapi.security import APIKeyHeader
 api_key_header = APIKeyHeader(name="X-Internal-Token", auto_error=False)
 
 load_dotenv()
-INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY")
+INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
 if not INTERNAL_API_KEY:
     raise RuntimeError("INTERNAL_API_KEY not found, check README for instructions")
