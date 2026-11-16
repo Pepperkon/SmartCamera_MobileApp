@@ -5,6 +5,7 @@ import shutil
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -151,6 +152,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+Path("data/images").mkdir(parents=True, exist_ok=True)
+Path("data/images/captured").mkdir(parents=True, exist_ok=True)
 
 app.mount("/data/images", StaticFiles(directory="data/images"), name="images")
 
