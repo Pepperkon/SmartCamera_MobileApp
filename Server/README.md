@@ -34,9 +34,18 @@ This is the central hub of the SmartCam system. It manages the SQLite database, 
       
     ```text
     MODEL_URL=http://192.168.X.Y:8001
+    SERVER_URL=http://localhost:8000
     INTERNAL_API_KEY=your_shared_secret_key
     REDIS_HOST=localhost
     ```
+
+   The mobile app registers Expo push tokens with `POST /push-tokens`. When
+   `/internal/broadcast` receives a `new_alert` event after the alert is saved,
+   the API sends a visible push to every registered token through Expo Push
+   Service. Configure FCM V1 and APNs credentials in the linked EAS project;
+   the server does not need those private provider keys directly.
+   `SERVER_URL` is used by the worker to call the API (`http://localhost:8000`
+   for native development; Docker Compose sets it to `http://server-api:8000`).
 
 4. **Installation**
 

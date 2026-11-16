@@ -23,6 +23,7 @@ from services import (
 )
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8000")
 
 
 async def startup(ctx: dict) -> None:

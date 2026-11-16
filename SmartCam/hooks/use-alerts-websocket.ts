@@ -1,14 +1,16 @@
 import { useEffect } from "react";
 import { AlertItem } from "@/constants/types";
-import { WS_URL } from "@/constants/api";
 import { saveAlertsToCache } from "@/services/alertService";
+import { useServer } from "@/providers/ServerProvider";
 
 // Connects to the alerts WebSocket and directly updates the parent component's state
 export const useAlertsWebSocket = (
   setAlerts: React.Dispatch<React.SetStateAction<AlertItem[]>>,
 ) => {
+  const { wsUrl } = useServer();
+
   useEffect(() => {
-    const ws = new WebSocket(`${WS_URL}/ws/alerts`);
+    const ws = new WebSocket(`${wsUrl}/ws/alerts`);
 
     ws.onopen = () => {
       console.log("🟢 Connected to WebSocket server!");
@@ -63,5 +65,5 @@ export const useAlertsWebSocket = (
     return () => {
       ws.close();
     };
-  }, [setAlerts]);
+  }, [setAlerts, wsUrl]);
 };

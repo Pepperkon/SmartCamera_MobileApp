@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from sqlalchemy import JSON, Column
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -43,6 +43,18 @@ class UserRead(SQLModel):
     alerts: list[AlertRead] = []
     is_trusted: bool
     is_temporary: bool
+
+
+class PushTokenRegistration(SQLModel):
+    token: str
+    platform: Literal["android", "ios"]
+
+
+class PushToken(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    token: str = Field(unique=True, index=True)
+    platform: str
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
 class Alert(SQLModel, table=True):

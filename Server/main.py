@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import shutil
 import uuid
 from contextlib import asynccontextmanager
@@ -15,6 +16,8 @@ from database import (
     Alert,
     AlertRead,
     FaceTemplate,
+    PushToken,
+    PushTokenRegistration,
     User,
     UserRead,
     async_session_maker,
@@ -402,6 +405,126 @@ async def websocket_alerts_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
+@app.post("/push-tokens")
+async def register_push_token(
+    registration: PushTokenRegistration,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    token = registration.token.strip()
+    if not re.fullmatch(r"(?:Expo|Exponent)PushToken\[[^\]\s]+\]", token):
+        raise HTTPException(status_code=422, detail="Invalid Expo push token")
+
+    push_token = (await session.exec(select(PushToken).where(PushToken.token == token))).first()
+    if push_token:
+        push_token.platform = registration.platform
+        session.add(push_token)
+    else:
+        session.add(PushToken(token=token, platform=registration.platform))
+
+    await session.commit()
+    return {"status": "registered"}
+
+
+@app.delete("/push-tokens")
+async def unregister_push_token(
+    registration: PushTokenRegistration,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    await session.exec(delete(PushToken).where(PushToken.token == registration.token.strip()))
+    await session.commit()
+    return {"status": "unregistered"}
+
+
+async def send_alert_pushes(
+    alert: dict[str, Any],
+    session: AsyncSession,
+    client: httpx.AsyncClient,
+) -> None:
+    push_tokens = (await session.exec(select(PushToken))).all()
+    if not push_tokens:
+        return
+
+    messages = [
+        {
+            "to": push_token.token,
+            "title": "SmartCam — nowy alert",
+            "body": str(alert.get("title") or "Wykryto osobę"),
+            "sound": "default",
+            "channelId": "alerts",
+            "priority": "high",
+            "data": {"type": "new_alert", "alertId": alert.get("id")},
+        }
+        for push_token in push_tokens
+    ]
+
+    # Expo accepts batches of up to 100 messages per request.
+    for batch_start in range(0, len(messages), 100):
+        batch = messages[batch_start : batch_start + 100]
+        batch_tokens = push_tokens[batch_start : batch_start + 100]
+        tickets: Any = None
+        for attempt in range(3):
+            try:
+                response = await client.post(
+                    "https://exp.host/--/api/v2/push/send",
+                    json=batch,
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    },
+                )
+                response.raise_for_status()
+                response_data = response.json()
+                tickets = response_data.get("data") if isinstance(response_data, dict) else None
+                break
+            except httpx.HTTPStatusError as error:
+                retryable = error.response.status_code == 429 or error.response.status_code >= 500
+                if retryable and attempt < 2:
+                    await asyncio.sleep(2**attempt)
+                    continue
+                print(f"[PUSH] Expo request failed for alert {alert.get('id')}: {error}")
+            except httpx.RequestError as error:
+                if attempt < 2:
+                    await asyncio.sleep(2**attempt)
+                    continue
+                print(f"[PUSH] Expo request failed for alert {alert.get('id')}: {error}")
+            except ValueError as error:
+                print(f"[PUSH] Expo returned invalid JSON for alert {alert.get('id')}: {error}")
+            break
+
+        if not isinstance(tickets, list) or len(tickets) != len(batch):
+            print(
+                f"[PUSH] Unexpected Expo response for alert {alert.get('id')}: "
+                f"expected {len(batch)} tickets"
+            )
+            continue
+
+        for push_token, ticket in zip(batch_tokens, tickets, strict=True):
+            if not isinstance(ticket, dict):
+                print(f"[PUSH] Invalid Expo ticket for alert {alert.get('id')}")
+                continue
+            if ticket.get("status") == "ok":
+                continue
+            details = ticket.get("details", {})
+            print(
+                f"[PUSH] Expo rejected token for alert {alert.get('id')}: "
+                f"{ticket.get('message', 'unknown error')}"
+            )
+            if details.get("error") == "DeviceNotRegistered":
+                await session.exec(delete(PushToken).where(PushToken.id == push_token.id))
+                await session.commit()
+
+
+@app.post("/internal/broadcast", dependencies=[Depends(verify_api_key)])
+async def broadcast_alert(
+    payload: dict[str, Any],
+    session: AsyncSession = Depends(get_session),
+):
+    await manager.broadcast(payload)
+    if payload.get("type") == "new_alert":
+        await send_alert_pushes(payload.get("alert", {}), session, app.state.client)
+    return {"status": "ok"}
+
+
 # Checking alert's status from New to Read
 @app.post("/alerts/{alert_id}/read")
 async def mark_as_read(
@@ -511,12 +634,6 @@ async def recognize_face(
     await app.state.redis_pool.enqueue_job("process_image_worker", session_id, filename)
 
     return {"status": "success"}
-
-
-@app.post("/internal/broadcast", dependencies=[Depends(verify_api_key)])
-async def broadcast_alert(payload: dict):
-    await manager.broadcast(payload)
-    return {"status": "ok"}
 
 
 if __name__ == "__main__":
