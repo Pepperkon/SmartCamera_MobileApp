@@ -148,6 +148,7 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
             await session.refresh(new_alert)
 
             alert_dict = AlertRead.model_validate(new_alert).model_dump(mode="json")
+            alert_dict["recognised_user_is_trusted"] = user.is_trusted
             server_broadcast_url = os.environ.get("SERVER_URL", "http://server-api:8000")
             try:
                 await client.post(

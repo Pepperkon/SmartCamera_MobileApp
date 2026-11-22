@@ -12,11 +12,18 @@ interface Props {
 
 function AlertMin({ alert, markAsRead }: Props) {
   const router = useRouter();
+  const isTrusted = Boolean(
+    alert.recognised_user_id && alert.recognised_user_is_trusted,
+  );
 
   return (
     <Pressable
       style={({ pressed }) => [
         GlobalStyles.singleEntry,
+        {
+          borderLeftWidth: 4,
+          borderLeftColor: isTrusted ? "#4ade80" : "#f87171",
+        },
         pressed && GlobalStyles.pressed,
       ]}
       onPress={() => {

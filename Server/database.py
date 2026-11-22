@@ -25,6 +25,7 @@ class AlertRead(SQLModel):
     image: str
     isNew: bool
     recognised_user_id: int | None
+    recognised_user_is_trusted: bool | None = None
     embedding: list[float] | None
     confidence: float = Field(default=0.0)
     location: list[int] | None

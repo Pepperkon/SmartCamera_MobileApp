@@ -49,6 +49,17 @@ export const useAlertsWebSocket = (
               (a) => String(a.id) !== String(data.alert_id),
             );
             break;
+
+          case "user_trust_updated":
+            // Update trust status across all alerts for this recognized user
+            updatedAlerts = updatedAlerts.map((a) =>
+              a.recognised_user_id !== null &&
+              a.recognised_user_id !== undefined &&
+              String(a.recognised_user_id) === String(data.user_id)
+                ? { ...a, recognised_user_is_trusted: data.is_trusted }
+                : a,
+            );
+            break;
         }
 
         setTimeout(() => saveAlertsToCache(updatedAlerts), 0);

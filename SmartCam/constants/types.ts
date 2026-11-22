@@ -8,7 +8,8 @@ export interface AlertItem {
   time: string;
   date?: string;
   isNew: boolean;
-  captured_user_id?: number;
+  recognised_user_id?: number | null;
+  recognised_user_is_trusted?: boolean | null;
   confidence: number;
   location?: [number, number, number, number] | null;
 }
