@@ -49,11 +49,9 @@ function AlertMax() {
     return "#f87171";
   };
 
-  // TODO: Refactor color logic to rely on user.is_trusted instead of title.
-  // Currently, any non-temporary recognized face gets green, even if marked untrusted.
-  // Blocked by: backend API needs to expose is_trusted in the alert.
-  const getBoundingBoxColor = (title: string) => {
-    if (title.startsWith("Recognized:")) {
+  const getBoundingBoxColor = () => {
+    // Show green box only for recognized, trusted users
+    if (alert && alert.recognised_user_id && alert.recognised_user_is_trusted) {
       return "#4ade80";
     }
     return "#f87171";
@@ -135,7 +133,7 @@ function AlertMax() {
       left: `${(left / origW) * 100}%` as const,
       width: `${((right - left) / origW) * 100}%` as const,
       height: `${((bottom - top) / origH) * 100}%` as const,
-      borderColor: getBoundingBoxColor(alert.title),
+      borderColor: getBoundingBoxColor(),
     };
 
     return <View style={[styles.boundingBox, boxStyle]} />;

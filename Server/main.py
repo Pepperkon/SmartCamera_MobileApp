@@ -1,4 +1,5 @@
 import asyncio
+import io
 import os
 import re
 import shutil
@@ -39,6 +40,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from PIL import Image, UnidentifiedImageError
 from redis.asyncio import Redis
 from services import (
     add_user_image_logic,
@@ -158,12 +160,53 @@ Path("data/images/captured").mkdir(parents=True, exist_ok=True)
 
 app.mount("/data/images", StaticFiles(directory="data/images"), name="images")
 
+# Constants for file validation
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/jpg", "image/png"]
+MIN_IMAGE_DIMENSION = 160  # pixels
+MAX_IMAGE_DIMENSION = 4096  # pixels
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+async def validate_image_file(file: UploadFile) -> None:
+    file_content = await file.read()
+    await file.seek(0)
+
+    if len(file_content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024):.0f}MB",
+        )
+
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Invalid content type. Allowed types: {ALLOWED_CONTENT_TYPES}",
+        )
+
+    try:
+        with Image.open(io.BytesIO(file_content)) as img:
+            width, height = img.size
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as e:
+        raise HTTPException(status_code=422, detail=f"Invalid image format: {e}") from e
+
+    if min(width, height) < MIN_IMAGE_DIMENSION:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Image too small. Minimum dimension is {MIN_IMAGE_DIMENSION}px",
+        )
+
+    if max(width, height) > MAX_IMAGE_DIMENSION:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Image too large. Maximum dimension is {MAX_IMAGE_DIMENSION}px",
+        )
 
 
 def get_client(request: Request) -> httpx.AsyncClient:
@@ -230,6 +273,9 @@ async def create_user(
     session: AsyncSession = Depends(get_session),
     client: httpx.AsyncClient = Depends(get_client),
 ) -> User:
+    # Walidacja pliku przed przetwarzaniem
+    await validate_image_file(file)
+
     face_encodings = await get_encoding_from_model(client, file)
 
     if face_encodings is None:
@@ -329,6 +375,9 @@ async def add_user_image(
     session: AsyncSession = Depends(get_session),
     client: httpx.AsyncClient = Depends(get_client),
 ):
+    # Validate uploaded image before processing
+    await validate_image_file(file)
+
     face_encodings = await get_encoding_from_model(client, file)
 
     if face_encodings is None:
@@ -385,13 +434,28 @@ async def get_user(user_id: int, session: AsyncSession = Depends(get_session)):
 # Returns the list of all alerts
 @app.get("/alerts", response_model=list[AlertRead])
 async def get_alerts(
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
-    return (
-        await session.exec(select(Alert).order_by(col(Alert.id).desc()).offset(offset).limit(limit))
+    rows = (
+        await session.exec(
+            select(Alert, User.is_trusted)
+            .outerjoin(User, Alert.recognised_user_id == User.id)
+            .order_by(col(Alert.id).desc())
+            .offset(offset)
+            .limit(limit)
+        )
     ).all()
+
+    # Build AlertRead models with the user's trust flag attached
+    result: list[AlertRead] = []
+    for alert, is_trusted in rows:
+        alert_read = AlertRead.model_validate(alert)
+        alert_read.recognised_user_is_trusted = is_trusted
+        result.append(alert_read)
+
+    return result
 
 
 @app.websocket("/ws/alerts")
@@ -617,6 +681,16 @@ async def update_trust_status(
 
     user.is_trusted = is_trusted
     await session.commit()
+
+    # Notify connected mobile clients about the trust status change
+    await manager.broadcast(
+        {
+            "type": "user_trust_updated",
+            "user_id": user.id,
+            "is_trusted": user.is_trusted,
+        }
+    )
+
     return {"message": "Status updated", "is_trusted": user.is_trusted}
 
 
@@ -624,9 +698,19 @@ async def update_trust_status(
 async def recognize_face(
     request: Request, file: UploadFile = File(...), session_id: str = Form(...)
 ) -> dict[str, str]:
+    contents = await file.read()
+
+    if file.content_type and file.content_type not in ALLOWED_CONTENT_TYPES:
+        print(f"[WARN] Invalid content type for recognize: {file.content_type}")
+
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024):.0f}MB",
+        )
+
     print(f"\n[RECOGNIZE] --- New request for session: {session_id} ---")
 
-    contents = await file.read()
     filename = f"{str(uuid.uuid4())}.jpg"
 
     await save_image_to_disk(filename, contents)
