@@ -2,53 +2,63 @@ import {
   View,
   Text,
   Pressable,
-  TextInput,
   StyleSheet,
   Alert,
-  Image,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS, SPACING } from "@/constants/theme";
 import { GlobalStyles } from "@/styles/GlobalStyles";
-import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { addUserImage } from "@/services/userService";
-import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import Checkbox from "@/components/ui/checkbox";
-
-const FILTER_OPTIONS = [
-  { id: "recognised", label: "Recognised" },
-  { id: "unknown", label: "Unknown" },
-];
+import {
+  AlertFilters,
+  DEFAULT_ALERT_FILTERS,
+  getAlertFilters,
+  saveAlertFilters,
+} from "@/services/alertFilterService";
 
 function Filters() {
   const router = useRouter();
-  const [loading, setLoading] = useState<boolean>(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [filters, setFilters] =
+    useState<AlertFilters>(DEFAULT_ALERT_FILTERS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const toggleOption = (id: string) => {
-    if (selectedIds.includes(id)) {
-      setSelectedIds(selectedIds.filter((item) => item !== id));
-    } else {
-      setSelectedIds([...selectedIds, id]);
-    }
+  useEffect(() => {
+    let active = true;
+    getAlertFilters().then((savedFilters) => {
+      if (active) setFilters(savedFilters);
+      if (active) setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const setFilter = (key: keyof AlertFilters, value: boolean) => {
+    setFilters((current) => ({ ...current, [key]: value }));
   };
 
-  const handleSave = async () => {
+  const handleApply = async () => {
+    setSaving(true);
     try {
-    } catch (e) {
-      Alert.alert("Network Error", "The server is unreachable.");
+      await saveAlertFilters(filters);
+      router.back();
+    } catch {
+      Alert.alert("Error", "Could not save alert filters.");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   if (loading) {
     return (
       <SafeAreaView style={GlobalStyles.container}>
-        <View style={[styles.container, { justifyContent: "center" }]}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="white" />
         </View>
       </SafeAreaView>
@@ -58,10 +68,80 @@ function Filters() {
   return (
     <SafeAreaView style={GlobalStyles.container}>
       <View style={styles.container}>
-        <Text style={GlobalStyles.text_secondary}>Alert type:</Text>
-        <View style={styles.checkbox_container}>
-          <Checkbox text="Recognised"></Checkbox>
-          <Checkbox text="Unknown"></Checkbox>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.filterSections}
+        >
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Temporary status</Text>
+            <View style={styles.checkboxContainer}>
+              <Checkbox
+                text="Temporary"
+                isSelected={filters.showTemporary}
+                onSelectionChange={(value) =>
+                  setFilter("showTemporary", value)
+                }
+                containerStyle={styles.checkbox}
+              />
+              <Checkbox
+                text="Permanent"
+                isSelected={filters.showPermanent}
+                onSelectionChange={(value) => setFilter("showPermanent", value)}
+                containerStyle={styles.checkbox}
+              />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Trust status</Text>
+            <View style={styles.checkboxContainer}>
+              <Checkbox
+                text="Trusted"
+                isSelected={filters.showTrusted}
+                onSelectionChange={(value) => setFilter("showTrusted", value)}
+                containerStyle={styles.checkbox}
+              />
+              <Checkbox
+                text="Not trusted"
+                isSelected={filters.showUntrusted}
+                onSelectionChange={(value) =>
+                  setFilter("showUntrusted", value)
+                }
+                containerStyle={styles.checkbox}
+              />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Other</Text>
+            <View style={styles.checkboxContainer}>
+              <Checkbox
+                text="Unread only"
+                isSelected={filters.unreadOnly}
+                onSelectionChange={(value) => setFilter("unreadOnly", value)}
+                containerStyle={styles.checkbox}
+              />
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.actions}>
+          <Pressable
+            style={[styles.button, styles.resetButton]}
+            onPress={() => setFilters({ ...DEFAULT_ALERT_FILTERS })}
+            disabled={saving}
+          >
+            <Text style={styles.buttonText}>Reset</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.button, styles.applyButton]}
+            onPress={handleApply}
+            disabled={saving}
+          >
+            <Text style={styles.buttonText}>
+              {saving ? "Saving..." : "Apply"}
+            </Text>
+          </Pressable>
         </View>
       </View>
     </SafeAreaView>
@@ -69,35 +149,61 @@ function Filters() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    width: "95%",
+    justifyContent: "center",
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.primary,
-    height: "80%",
     width: "95%",
     borderRadius: 20,
-    alignItems: "center",
-    paddingTop: SPACING.xl,
-    paddingHorizontal: SPACING.m,
+    padding: SPACING.m,
   },
-  checkbox_container: {
+  scrollView: {
+    flex: 1,
+  },
+  filterSections: {
+    gap: SPACING.l,
+    paddingBottom: SPACING.m,
+  },
+  section: {
+    gap: SPACING.s,
+  },
+  sectionTitle: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "600",
+  },
+  checkboxContainer: {
+    gap: SPACING.s,
+  },
+  checkbox: {
+    width: "100%",
+    marginHorizontal: 0,
+  },
+  actions: {
     flexDirection: "row",
+    gap: SPACING.s,
     marginTop: SPACING.m,
-    padding: SPACING.s,
-  },
-  input: {
-    backgroundColor: "white",
-    padding: 10,
-    marginBottom: 10,
-    borderRadius: 5,
-    fontSize: 30,
-    width: "90%",
   },
   button: {
+    flex: 1,
+    alignItems: "center",
     paddingVertical: SPACING.m,
-    paddingHorizontal: SPACING.l,
-    borderRadius: 5,
+    borderRadius: 10,
+  },
+  resetButton: {
+    backgroundColor: "#254E6B",
+  },
+  applyButton: {
     backgroundColor: COLORS.secondary,
-    marginVertical: SPACING.m,
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "600",
   },
 });
 

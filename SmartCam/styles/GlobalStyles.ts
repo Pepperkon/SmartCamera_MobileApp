@@ -6,13 +6,13 @@ export const GlobalStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
     alignItems: "center",
-    padding: SPACING.m,
+    padding: SPACING.xs,
   },
 
   singleEntry: {
     width: "100%",
     paddingVertical: SPACING.m,
-    paddingHorizontal: SPACING.m,
+    paddingHorizontal: SPACING.s,
     minHeight: 80,
 
     borderRadius: 15,
@@ -36,6 +36,7 @@ export const GlobalStyles = StyleSheet.create({
     marginHorizontal: SPACING.xs,
 
     minHeight: 50,
+    minWidth: 150,
 
     borderRadius: 15,
 
@@ -52,13 +53,13 @@ export const GlobalStyles = StyleSheet.create({
   },
 
   text_primary: {
-    fontSize: 40,
+    fontSize: 30,
     fontWeight: "600",
     color: "#ffff",
   },
 
   text_secondary: {
-    fontSize: 30,
+    fontSize: 20,
     fontWeight: "600",
     color: "#ffff",
   },

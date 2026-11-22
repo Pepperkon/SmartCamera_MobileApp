@@ -9,12 +9,19 @@ import {
   Dimensions,
   StyleSheet,
   Alert,
+  TextInput,
 } from "react-native";
 import React, { useCallback, useState } from "react";
-import { COLORS, SPACING } from "@/constants/theme";
+import { COLORS, SPACING, TRUST_COLORS } from "@/constants/theme";
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { deleteUser, deleteUserFromCache } from "@/services/userService";
+import {
+  deleteUser,
+  deleteUserFromCache,
+  saveTemporaryUser,
+  updateUserName,
+  updateUserTrust,
+} from "@/services/userService";
 import { User } from "@/constants/types";
 import { API_URL } from "@/constants/api";
 import CircleButton from "./circleButton";
@@ -27,6 +34,9 @@ function UserMax() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGalleryVisble, setGalleryVisible] = useState(false);
+  const [isNameEditorVisible, setNameEditorVisible] = useState(false);
+  const [editedName, setEditedName] = useState("");
+  const [isSavingName, setSavingName] = useState(false);
 
   const handleDelete = (userName: string) => {
     Alert.alert(
@@ -54,6 +64,82 @@ function UserMax() {
 
   const addImage = () => {
     router.push({ pathname: "/add-image", params: { id: id } });
+  };
+
+  const openNameEditor = () => {
+    if (!user) return;
+    setEditedName(user.name);
+    setNameEditorVisible(true);
+  };
+
+  const handleSaveName = async () => {
+    if (!user) return;
+
+    const newName = editedName.trim();
+    if (!newName) {
+      Alert.alert("Invalid name", "Name cannot be empty.");
+      return;
+    }
+
+    if (newName === user.name) {
+      setNameEditorVisible(false);
+      return;
+    }
+
+    setSavingName(true);
+    try {
+      await updateUserName(user.id, newName);
+      setUser((prev) => (prev ? { ...prev, name: newName } : prev));
+      setNameEditorVisible(false);
+    } catch (error) {
+      console.error("Błąd zmiany imienia użytkownika:", error);
+      Alert.alert("Error", "Could not update the user's name.");
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleToggleTrust = async () => {
+    if (!user) return;
+
+    const newStatus = !user.is_trusted;
+
+    try {
+      const data = await updateUserTrust(user.id, newStatus);
+
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              is_trusted: data.is_trusted,
+              is_temporary: data.is_temporary,
+            }
+          : prev,
+      );
+
+      Alert.alert(
+        "Status użytkownika",
+        data.is_trusted
+          ? `${user.name} jest teraz użytkownikiem zaufanym.`
+          : `${user.name} jest teraz użytkownikiem niezaufanym.`,
+      );
+    } catch (error) {
+      console.error("Błąd zmiany statusu zaufania:", error);
+      Alert.alert("Błąd", "Nie udało się zmienić statusu użytkownika.");
+    }
+  };
+
+  const handleSetPermanent = async () => {
+    if (!user || !user.is_temporary) return;
+
+    try {
+      await saveTemporaryUser(user.id, user.name);
+      setUser((prev) => (prev ? { ...prev, is_temporary: false } : prev));
+      Alert.alert("User updated", `${user.name} is now permanent.`);
+    } catch (error) {
+      console.error("Błąd zapisywania użytkownika:", error);
+      Alert.alert("Error", "Could not set the user as permanent.");
+    }
   };
 
   useFocusEffect(
@@ -99,21 +185,53 @@ function UserMax() {
     : { uri: "https://ui-avatars.com/api/?name=" + user.name };
 
   return (
-    <View style={styles.container}>
-      <Text style={GlobalStyles.text_primary}>{user.name}</Text>
+    <View
+      style={[
+        styles.container,
+        {
+          borderLeftWidth: 4,
+          borderLeftColor: user.is_trusted
+            ? TRUST_COLORS.trusted
+            : TRUST_COLORS.untrusted,
+        },
+      ]}
+    >
+      <Pressable onPress={openNameEditor} accessibilityRole="button">
+        <Text style={GlobalStyles.text_primary}>{user.name}</Text>
+      </Pressable>
       <Pressable onPress={() => setGalleryVisible(true)}>
         <Image source={imageSource} style={styles.image} />
       </Pressable>
 
-      <View style={styles.button_container}>
+      <View
+        style={[
+          styles.button_container,
+          user.is_temporary && styles.permanent_action_container,
+        ]}
+      >
         <CircleButton
           iconName="delete"
           onPress={() => handleDelete(user.name)}
         />
-        <CircleButton iconName="download" />
+        {user.is_temporary ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.permanent_button,
+              pressed && GlobalStyles.pressed,
+            ]}
+            onPress={handleSetPermanent}
+          >
+            <Text style={styles.permanent_button_text}>
+              Set as permanent
+            </Text>
+          </Pressable>
+        ) : (
+          <CircleButton iconName="download" />
+        )}
       </View>
       <View style={styles.button_container}>
         <CircleButton iconName="plus" onPress={addImage} />
+        <CircleButton iconName="retweet" onPress={handleToggleTrust} />
       </View>
 
       <Modal visible={isGalleryVisble} transparent={true} animationType="fade">
@@ -140,6 +258,46 @@ function UserMax() {
           />
         </View>
       </Modal>
+      <Modal
+        visible={isNameEditorVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNameEditorVisible(false)}
+      >
+        <View style={styles.name_modal_backdrop}>
+          <View style={styles.name_modal}>
+            <Text style={GlobalStyles.text_secondary}>Change name</Text>
+            <TextInput
+              style={styles.name_input}
+              value={editedName}
+              onChangeText={setEditedName}
+              autoFocus
+              autoCapitalize="words"
+              returnKeyType="done"
+              onSubmitEditing={() => void handleSaveName()}
+              editable={!isSavingName}
+            />
+            <View style={styles.name_modal_buttons}>
+              <Pressable
+                style={[styles.name_modal_button, styles.cancel_button]}
+                onPress={() => setNameEditorVisible(false)}
+                disabled={isSavingName}
+              >
+                <Text style={styles.name_modal_button_text}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.name_modal_button, styles.save_button]}
+                onPress={() => void handleSaveName()}
+                disabled={isSavingName}
+              >
+                <Text style={styles.name_modal_button_text}>
+                  {isSavingName ? "Saving..." : "Save"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -159,6 +317,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-around",
     marginTop: 10,
+  },
+  permanent_action_container: {
+    width: "90%",
+  },
+  permanent_button: {
+    flex: 1,
+    minHeight: 80,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: SPACING.xs,
+    paddingHorizontal: SPACING.s,
+    borderRadius: 15,
+    backgroundColor: COLORS.secondary,
+  },
+  permanent_button_text: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "600",
+    textAlign: "center",
+    flexShrink: 1,
   },
   image: {
     width: 300,
@@ -195,6 +373,52 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 18,
     fontWeight: "bold",
+  },
+  name_modal_backdrop: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.m,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+  },
+  name_modal: {
+    width: "100%",
+    padding: SPACING.m,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+  },
+  name_input: {
+    marginTop: SPACING.m,
+    marginBottom: SPACING.m,
+    paddingHorizontal: SPACING.m,
+    paddingVertical: SPACING.s,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    color: COLORS.secondary,
+    fontSize: 20,
+  },
+  name_modal_buttons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: SPACING.s,
+  },
+  name_modal_button: {
+    minWidth: 90,
+    paddingHorizontal: SPACING.m,
+    paddingVertical: SPACING.s,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  cancel_button: {
+    backgroundColor: COLORS.secondary,
+  },
+  save_button: {
+    backgroundColor: "#254E6B",
+  },
+  name_modal_button_text: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
 

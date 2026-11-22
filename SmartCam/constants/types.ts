@@ -10,6 +10,10 @@ export interface AlertItem {
   isNew: boolean;
   recognised_user_id?: number | null;
   recognised_user_is_trusted?: boolean | null;
+  recognised_user_is_temporary?: boolean | null;
+  user?: {
+    is_temporary: boolean | null;
+  } | null;
   confidence: number;
   location?: [number, number, number, number] | null;
 }
@@ -26,4 +30,6 @@ export interface User {
   images: UserImage[];
   image: any;
   alerts: AlertItem[];
+  is_trusted: boolean;
+  is_temporary: boolean;
 }

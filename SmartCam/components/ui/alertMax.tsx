@@ -1,4 +1,4 @@
-import { COLORS, SPACING } from "@/constants/theme";
+import { COLORS, SPACING, TRUST_COLORS } from "@/constants/theme";
 import { AlertItem } from "@/constants/types";
 import {
   deleteAlert,
@@ -52,9 +52,9 @@ function AlertMax() {
   const getBoundingBoxColor = () => {
     // Show green box only for recognized, trusted users
     if (alert && alert.recognised_user_id && alert.recognised_user_is_trusted) {
-      return "#4ade80";
+      return TRUST_COLORS.trusted;
     }
-    return "#f87171";
+    return TRUST_COLORS.untrusted;
   };
 
   useEffect(() => {
@@ -152,7 +152,13 @@ function AlertMax() {
         </View>
       )}
       <ScrollView
-        style={styles.scrollContainer}
+        style={[
+          styles.scrollContainer,
+          {
+            borderLeftWidth: 4,
+            borderLeftColor: getBoundingBoxColor(),
+          },
+        ]}
         contentContainerStyle={{ alignItems: "center" }}
         showsVerticalScrollIndicator={false}
       >

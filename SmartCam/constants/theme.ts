@@ -4,6 +4,11 @@ export const COLORS = {
   background: "#363864",
 };
 
+export const TRUST_COLORS = {
+  trusted: "#4ade80",
+  untrusted: "#f87171",
+};
+
 export const SPACING = {
   xs: 4,
   s: 8,

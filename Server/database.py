@@ -17,6 +17,10 @@ async def get_session():
         yield session
 
 
+class AlertUserStatus(SQLModel):
+    is_temporary: bool | None = None
+
+
 class AlertRead(SQLModel):
     id: int | None = None
     title: str
@@ -26,6 +30,8 @@ class AlertRead(SQLModel):
     isNew: bool
     recognised_user_id: int | None
     recognised_user_is_trusted: bool | None = None
+    recognised_user_is_temporary: bool | None = None
+    user: AlertUserStatus | None = None
     embedding: list[float] | None
     confidence: float = Field(default=0.0)
     location: list[int] | None

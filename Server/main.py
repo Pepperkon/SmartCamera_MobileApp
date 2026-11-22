@@ -16,6 +16,7 @@ from auth import INTERNAL_API_KEY, verify_api_key
 from database import (
     Alert,
     AlertRead,
+    AlertUserStatus,
     FaceTemplate,
     PushToken,
     PushTokenRegistration,
@@ -244,7 +245,8 @@ async def get_faces_templates(
 # Displaying users in the mobile app
 @app.get("/users", response_model=list[UserRead])
 async def get_users(
-    is_temporary: bool = Query(default=False, description="Filter by temporary status"),
+    is_temporary: bool | None = Query(default=None, description="Filter by temporary status"),
+    is_trusted: bool | None = Query(default=None, description="Filter by trust status"),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
@@ -256,11 +258,17 @@ async def get_users(
             selectinload(User.images),
             selectinload(User.alerts),
         )
-        .where(User.is_temporary == is_temporary)
         .order_by(col(User.name))
         .offset(offset)
         .limit(limit)
     )
+    if is_trusted is not None:
+        statement = statement.where(User.is_trusted == is_trusted)
+    if is_temporary is not None:
+        statement = statement.where(User.is_temporary == is_temporary)
+    elif is_trusted is None:
+        statement = statement.where(User.is_temporary.is_(False))
+
     results = (await session.exec(statement)).all()
     return results
 
@@ -440,7 +448,7 @@ async def get_alerts(
 ):
     rows = (
         await session.exec(
-            select(Alert, User.is_trusted)
+            select(Alert, User.is_trusted, User.is_temporary)
             .outerjoin(User, Alert.recognised_user_id == User.id)
             .order_by(col(Alert.id).desc())
             .offset(offset)
@@ -448,11 +456,16 @@ async def get_alerts(
         )
     ).all()
 
-    # Build AlertRead models with the user's trust flag attached
+    # Attach the current user flags to each alert.
     result: list[AlertRead] = []
-    for alert, is_trusted in rows:
-        alert_read = AlertRead.model_validate(alert)
+    for alert, is_trusted, is_temporary in rows:
+        alert_read = AlertRead.model_validate(alert.model_dump())
         alert_read.recognised_user_is_trusted = is_trusted
+        alert_read.recognised_user_is_temporary = is_temporary
+        if alert.recognised_user_id is not None:
+            alert_read.user = AlertUserStatus(
+                is_temporary=is_temporary,
+            )
         result.append(alert_read)
 
     return result
@@ -603,7 +616,15 @@ async def mark_as_read(
     await session.commit()
     await session.refresh(alert)
 
-    alert_dict = AlertRead.model_validate(alert).model_dump()
+    alert_dict = AlertRead.model_validate(alert.model_dump()).model_dump()
+    user = (
+        await session.get(User, alert.recognised_user_id)
+        if alert.recognised_user_id is not None
+        else None
+    )
+    alert_dict["recognised_user_is_trusted"] = user.is_trusted if user else None
+    alert_dict["recognised_user_is_temporary"] = user.is_temporary if user else None
+    alert_dict["user"] = {"is_temporary": user.is_temporary} if user else None
     # Instruct clients to update the alert's state
     await manager.broadcast({"type": "alert_read", "alert": alert_dict})
 
@@ -642,6 +663,40 @@ async def delete_alert(
     return {"message": f"Alert {alert_id} was removed", "deleted_id": alert_id}
 
 
+@app.patch("/users/{user_id}/name")
+async def update_user_name(
+    user_id: int, name: str, session: AsyncSession = Depends(get_session)
+) -> dict[str, str]:
+    user = await session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    updated_name = name.strip()
+    if not updated_name:
+        raise HTTPException(status_code=422, detail="Name cannot be empty")
+
+    if user.name == updated_name:
+        return {"message": "Name unchanged"}
+
+    user.name = updated_name
+    title_prefix = "Unknown" if user.is_temporary else "Recognized"
+    alert_updates = []
+    for alert in user.alerts:
+        alert.title = f"{title_prefix}: {updated_name}"
+        alert_dict = AlertRead.model_validate(alert.model_dump()).model_dump(mode="json")
+        alert_dict["recognised_user_is_trusted"] = user.is_trusted
+        alert_dict["recognised_user_is_temporary"] = user.is_temporary
+        alert_dict["user"] = {"is_temporary": user.is_temporary}
+        alert_updates.append({"type": "updated_alert", "alert": alert_dict})
+
+    await session.commit()
+
+    for alert_update in alert_updates:
+        await manager.broadcast(alert_update)
+
+    return {"message": f"User {updated_name} updated"}
+
+
 # Upgrading a temporary user to a permanent one and updating their old alerts
 @app.patch("/users/{user_id}")
 async def save_temporary_user(
@@ -661,7 +716,10 @@ async def save_temporary_user(
     # Updating the titles of all previous alerts connected to this user
     for alert in user.alerts:
         alert.title = new_title
-        alert_dict = AlertRead.model_validate(alert).model_dump()
+        alert_dict = AlertRead.model_validate(alert.model_dump()).model_dump()
+        alert_dict["recognised_user_is_trusted"] = user.is_trusted
+        alert_dict["recognised_user_is_temporary"] = user.is_temporary
+        alert_dict["user"] = {"is_temporary": user.is_temporary}
         alert_data = {"type": "updated_alert", "alert": alert_dict}
         await manager.broadcast(alert_data)
 
@@ -680,6 +738,8 @@ async def update_trust_status(
         raise HTTPException(status_code=404, detail="User not found")
 
     user.is_trusted = is_trusted
+    if is_trusted:
+        user.is_temporary = False
     await session.commit()
 
     # Notify connected mobile clients about the trust status change
@@ -688,10 +748,15 @@ async def update_trust_status(
             "type": "user_trust_updated",
             "user_id": user.id,
             "is_trusted": user.is_trusted,
+            "is_temporary": user.is_temporary,
         }
     )
 
-    return {"message": "Status updated", "is_trusted": user.is_trusted}
+    return {
+        "message": "Status updated",
+        "is_trusted": user.is_trusted,
+        "is_temporary": user.is_temporary,
+    }
 
 
 @app.post("/recognize", dependencies=[Depends(verify_api_key)])

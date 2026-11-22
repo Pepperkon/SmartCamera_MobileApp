@@ -12,6 +12,10 @@ import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
 import AlertMin from "./alertMin";
 import SearchBar from "./searchBar";
 import { useAlertsWebSocket } from "@/hooks/use-alerts-websocket";
+import {
+  DEFAULT_ALERT_FILTERS,
+  getAlertFilters,
+} from "@/services/alertFilterService";
 
 function EntryList() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -19,10 +23,26 @@ function EntryList() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [alertFilters, setAlertFilters] = useState(DEFAULT_ALERT_FILTERS);
 
-  const filteredAlerts = (alerts || []).filter((alert) =>
-    alert?.title?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredAlerts = (alerts || []).filter((alert) => {
+    const title = alert?.title?.toLowerCase() || "";
+    const isTemporary =
+      alert.user?.is_temporary ??
+      alert.recognised_user_is_temporary ??
+      true;
+    const isTrusted = alert.recognised_user_is_trusted === true;
+    const matchesTemporary = isTemporary
+      ? alertFilters.showTemporary
+      : alertFilters.showPermanent;
+    const matchesTrust = isTrusted
+      ? alertFilters.showTrusted
+      : alertFilters.showUntrusted;
+    const matchesUnread = !alertFilters.unreadOnly || alert.isNew;
+    const matchesSearch = title.includes(searchQuery.toLowerCase());
+
+    return matchesTemporary && matchesTrust && matchesUnread && matchesSearch;
+  });
 
   const syncWithCache = async () => {
     const cachedData = await getAlertsFromCache();
@@ -60,6 +80,19 @@ function EntryList() {
     useCallback(() => {
       syncWithCache();
       loadData();
+    }, []),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getAlertFilters().then((savedFilters) => {
+        if (active) setAlertFilters(savedFilters);
+      });
+
+      return () => {
+        active = false;
+      };
     }, []),
   );
 
