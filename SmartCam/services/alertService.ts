@@ -2,7 +2,7 @@ import { AlertItem } from "@/constants/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "@/constants/api";
 
-const STORAGE_KEY = "@alerts_cache";
+const STORAGE_KEY = "@alerts_cache_v2";
 
 export const saveAlertsToCache = async (alerts: AlertItem[]) => {
   try {

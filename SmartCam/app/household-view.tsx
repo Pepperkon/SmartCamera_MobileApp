@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 function HouseholdView() {
   const router = useRouter();
 
-  const [isTrustedView, setIsTrustedView] = useState(false);
+  const [isTrustedView, setIsTrustedView] = useState(true);
 
   const addUser = () => {
     router.push("/new-user");

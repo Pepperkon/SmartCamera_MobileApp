@@ -1,5 +1,6 @@
 import { AlertItem } from "@/constants/types";
 import { GlobalStyles } from "@/styles/GlobalStyles";
+import { TRUST_COLORS } from "@/constants/theme";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
@@ -22,7 +23,9 @@ function AlertMin({ alert, markAsRead }: Props) {
         GlobalStyles.singleEntry,
         {
           borderLeftWidth: 4,
-          borderLeftColor: isTrusted ? "#4ade80" : "#f87171",
+          borderLeftColor: isTrusted
+            ? TRUST_COLORS.trusted
+            : TRUST_COLORS.untrusted,
         },
         pressed && GlobalStyles.pressed,
       ]}

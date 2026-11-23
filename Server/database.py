@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Literal, Optional
 
+from pydantic import field_validator
 from sqlalchemy import JSON, Column
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import Field, Relationship, SQLModel
@@ -17,6 +18,10 @@ async def get_session():
         yield session
 
 
+class AlertUserStatus(SQLModel):
+    is_temporary: bool | None = None
+
+
 class AlertRead(SQLModel):
     id: int | None = None
     title: str
@@ -26,9 +31,18 @@ class AlertRead(SQLModel):
     isNew: bool
     recognised_user_id: int | None
     recognised_user_is_trusted: bool | None = None
+    recognised_user_is_temporary: bool | None = None
+    user: AlertUserStatus | None = None
     embedding: list[float] | None
-    confidence: float = Field(default=0.0)
+    confidence: float | None = Field(default=None)
     location: list[int] | None
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, value: float | None) -> float | None:
+        if value is None or value < 0:
+            return None
+        return value
 
 
 class FaceTemplateRead(SQLModel):

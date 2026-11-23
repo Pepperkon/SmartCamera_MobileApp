@@ -56,7 +56,12 @@ export const useAlertsWebSocket = (
               a.recognised_user_id !== null &&
               a.recognised_user_id !== undefined &&
               String(a.recognised_user_id) === String(data.user_id)
-                ? { ...a, recognised_user_is_trusted: data.is_trusted }
+                ? {
+                    ...a,
+                    recognised_user_is_trusted: data.is_trusted,
+                    recognised_user_is_temporary: data.is_temporary,
+                    user: { is_temporary: data.is_temporary },
+                  }
                 : a,
             );
             break;

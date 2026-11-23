@@ -1,9 +1,12 @@
-import { COLORS, SPACING } from "@/constants/theme";
+import { COLORS, SPACING, TRUST_COLORS } from "@/constants/theme";
 import { AlertItem } from "@/constants/types";
 import {
   deleteAlert,
   deleteAlertFromCache,
+  fetchAlerts,
   getAlertsFromCache,
+  markAsReadOnServer,
+  saveAlertsToCache,
 } from "@/services/alertService";
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -52,35 +55,113 @@ function AlertMax() {
   const getBoundingBoxColor = () => {
     // Show green box only for recognized, trusted users
     if (alert && alert.recognised_user_id && alert.recognised_user_is_trusted) {
-      return "#4ade80";
+      return TRUST_COLORS.trusted;
     }
-    return "#f87171";
+    return TRUST_COLORS.untrusted;
   };
 
-  useEffect(() => {
-    const loadAlert = async () => {
-      const cachedAlerts = await getAlertsFromCache();
-      if (cachedAlerts) {
-        const found = cachedAlerts.find((a) => String(a.id) === String(id));
-        setAlert(found || null);
+  const isTemporaryUser =
+      alert?.user?.is_temporary ??
+      alert?.recognised_user_is_temporary ??
+      true;
 
-        if (found && typeof found.image === "string") {
+    const renderConfidence = () => {
+      if (!alert) return null;
+
+      if (alert.confidence === null || alert.confidence === undefined || alert.confidence < 0) {
+        return (
+          <Text
+            style={[
+              GlobalStyles.text_secondary,
+              { color: "#cbd5e1", marginTop: 5 },
+            ]}
+          >
+            First appearance
+          </Text>
+        );
+      }
+
+      const rounded = Math.round(alert.confidence);
+      const label = isTemporaryUser
+        ? `Match: ${rounded}%`
+        : `Confidence: ${rounded}%`;
+
+      return (
+        <Text
+          style={[
+            GlobalStyles.text_secondary,
+            { color: getConfidenceColor(alert.confidence), marginTop: 5 },
+          ]}
+        >
+          {label}
+        </Text>
+      );
+    };
+
+  useEffect(() => {
+    let active = true;
+
+    const loadAlert = async () => {
+      const alertId = Array.isArray(id) ? id[0] : id;
+      if (!alertId) {
+        if (active) setLoading(false);
+        return;
+      }
+
+      let alertsList = await getAlertsFromCache();
+      let found = alertsList?.find((a) => String(a.id) === String(alertId));
+
+      if (!found) {
+        const freshAlerts = await fetchAlerts();
+        if (freshAlerts.length > 0) {
+          alertsList = freshAlerts;
+          await saveAlertsToCache(freshAlerts);
+          found = freshAlerts.find((a) => String(a.id) === String(alertId));
+        }
+      }
+
+      if (!active) return;
+
+      if (found) {
+        if (found.isNew) {
+          found = { ...found, isNew: false };
+          void markAsReadOnServer(String(found.id));
+          if (alertsList) {
+            const updatedCache = alertsList.map((a) =>
+              String(a.id) === String(found!.id) ? { ...a, isNew: false } : a,
+            );
+            void saveAlertsToCache(updatedCache);
+          }
+        }
+
+        setAlert(found);
+
+        if (typeof found.image === "string") {
           const uri = `${API_URL}/data/images/captured/${found.image}`;
           Image.getSize(
             uri,
             (width, height) => {
-              setImgDimensions({ width, height });
+              if (active) {
+                setImgDimensions({ width, height });
+              }
             },
             (error) => {
               console.error("Error retrieving photo size:", error);
             },
           );
         }
+      } else {
+        setAlert(null);
       }
+
       setLoading(false);
     };
 
-    loadAlert();
+    void loadAlert();
+
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   if (loading) {
@@ -152,7 +233,13 @@ function AlertMax() {
         </View>
       )}
       <ScrollView
-        style={styles.scrollContainer}
+        style={[
+          styles.scrollContainer,
+          {
+            borderLeftWidth: 4,
+            borderLeftColor: getBoundingBoxColor(),
+          },
+        ]}
         contentContainerStyle={{ alignItems: "center" }}
         showsVerticalScrollIndicator={false}
       >
@@ -163,14 +250,7 @@ function AlertMax() {
           <Text style={GlobalStyles.text_secondary}>{alert.date}</Text>
         </View>
 
-        <Text
-          style={[
-            GlobalStyles.text_secondary,
-            { color: getConfidenceColor(alert.confidence), marginTop: 5 },
-          ]}
-        >
-          Confidence: {Math.round(alert.confidence)}%
-        </Text>
+        {renderConfidence()}
 
         <View
           style={[

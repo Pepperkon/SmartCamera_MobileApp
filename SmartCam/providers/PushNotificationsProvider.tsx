@@ -2,21 +2,23 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
+import { useRouter } from "expo-router";
 import {
   AndroidImportance,
   addNotificationReceivedListener,
-  addNotificationResponseReceivedListener,
   getExpoPushTokenAsync,
   getPermissionsAsync,
   requestPermissionsAsync,
   setNotificationChannelAsync,
   setNotificationHandler,
+  useLastNotificationResponse,
   type Notification,
 } from "expo-notifications";
 import { useServer } from "./ServerProvider";
@@ -107,23 +109,20 @@ export function PushNotificationsProvider({
 }: {
   children: ReactNode;
 }) {
+  const router = useRouter();
   const { apiUrl } = useServer();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [lastNotification, setLastNotification] =
     useState<Notification | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const handledResponseIdRef = useRef<string | null>(null);
+  const lastNotificationResponse = useLastNotificationResponse();
 
   useEffect(() => {
     let mounted = true;
 
     // Odbiera powiadomienie, gdy aplikacja jest otwarta.
     const received = addNotificationReceivedListener(setLastNotification);
-
-    // Uruchamia się, gdy użytkownik kliknie powiadomienie, także po powrocie
-    // z tła lub uruchomieniu zamkniętej aplikacji.
-    const response = addNotificationResponseReceivedListener(
-      ({ notification }) => setLastNotification(notification),
-    );
 
     registerForPushNotifications()
       .then(async ({ token, platform }) => {
@@ -140,9 +139,38 @@ export function PushNotificationsProvider({
     return () => {
       mounted = false;
       received.remove();
-      response.remove();
     };
   }, [apiUrl]);
+
+  useEffect(() => {
+    if (!lastNotificationResponse) return;
+
+    const responseId = lastNotificationResponse.notification.request.identifier;
+    if (handledResponseIdRef.current === responseId) return;
+    handledResponseIdRef.current = responseId;
+
+    setLastNotification(lastNotificationResponse.notification);
+
+    const data = lastNotificationResponse.notification.request.content.data;
+    const rawAlertId = data?.alertId;
+
+    if (
+      (typeof rawAlertId === "string" || typeof rawAlertId === "number") &&
+      String(rawAlertId).trim() !== ""
+    ) {
+      const alertId = String(rawAlertId);
+      setTimeout(() => {
+        router.push({
+          pathname: "/alert-details",
+          params: { id: alertId },
+        });
+      }, 0);
+    } else if (data?.type === "new_alert") {
+      setTimeout(() => {
+        router.push("/alerts-view");
+      }, 0);
+    }
+  }, [lastNotificationResponse, router]);
 
   return (
     <PushContext.Provider value={{ expoPushToken, lastNotification, error }}>

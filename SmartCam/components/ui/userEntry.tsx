@@ -1,5 +1,5 @@
 import { API_URL } from "@/constants/api";
-import { COLORS } from "@/constants/theme";
+import { COLORS, TRUST_COLORS } from "@/constants/theme";
 import { User } from "@/constants/types";
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import { useRouter } from "expo-router";
@@ -30,6 +30,12 @@ function UserEntry({ user }: Props) {
     <Pressable
       style={({ pressed }) => [
         GlobalStyles.singleEntry,
+        {
+          borderLeftWidth: 4,
+          borderLeftColor: user.is_trusted
+            ? TRUST_COLORS.trusted
+            : TRUST_COLORS.untrusted,
+        },
         pressed && GlobalStyles.pressed,
       ]}
       onPress={() => {

@@ -74,6 +74,8 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
 
             top, right, bottom, left = res["location"]
 
+            is_first_appearance = False
+
             # When an uknown face is detected a new user is created
             # This user is untrusted and temporary
             # This means that when all their alerts are deleted the user is also deleted
@@ -87,6 +89,7 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
                 await session.commit()
                 assert new_user.id is not None, "Fresh user_id cannot be None"
                 user_id = new_user.id
+                is_first_appearance = True
                 print(f"[RECOGNIZE] Success: Created new user with ID: {user_id}")
 
             print(
@@ -130,7 +133,7 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
                 await add_user_image_logic(user_id, img_bytes, res["encoding"], session)
                 new_template_added = True
 
-            confidence = round(res.get("confidence", 0.0) * 100, 2)
+            confidence = -1.0 if is_first_appearance else round(res.get("confidence", 0.0) * 100, 2)
 
             new_alert = Alert(
                 title=title,
@@ -147,8 +150,10 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
             await session.commit()
             await session.refresh(new_alert)
 
-            alert_dict = AlertRead.model_validate(new_alert).model_dump(mode="json")
+            alert_dict = AlertRead.model_validate(new_alert.model_dump()).model_dump(mode="json")
             alert_dict["recognised_user_is_trusted"] = user.is_trusted
+            alert_dict["recognised_user_is_temporary"] = user.is_temporary
+            alert_dict["user"] = {"is_temporary": user.is_temporary}
             server_broadcast_url = os.environ.get("SERVER_URL", "http://server-api:8000")
             try:
                 await client.post(
