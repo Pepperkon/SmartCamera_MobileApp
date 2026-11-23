@@ -733,14 +733,31 @@ async def save_temporary_user(
 async def update_trust_status(
     user_id: int, is_trusted: bool, session: AsyncSession = Depends(get_session)
 ) -> dict[str, Any]:
-    user = await session.get(User, user_id)
+    user = await session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    was_temporary = user.is_temporary
     user.is_trusted = is_trusted
     if is_trusted:
         user.is_temporary = False
+
+    # Update historical alert titles when a temporary user becomes permanent
+    alert_updates = []
+    if was_temporary and not user.is_temporary:
+        new_title = f"Recognized: {user.name}"
+        for alert in user.alerts:
+            alert.title = new_title
+            alert_dict = AlertRead.model_validate(alert.model_dump()).model_dump(mode="json")
+            alert_dict["recognised_user_is_trusted"] = user.is_trusted
+            alert_dict["recognised_user_is_temporary"] = user.is_temporary
+            alert_dict["user"] = {"is_temporary": user.is_temporary}
+            alert_updates.append({"type": "updated_alert", "alert": alert_dict})
+
     await session.commit()
+
+    for alert_update in alert_updates:
+        await manager.broadcast(alert_update)
 
     # Notify connected mobile clients about the trust status change
     await manager.broadcast(

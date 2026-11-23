@@ -57,6 +57,44 @@ function AlertMax() {
     return TRUST_COLORS.untrusted;
   };
 
+  const isTemporaryUser =
+      alert?.user?.is_temporary ??
+      alert?.recognised_user_is_temporary ??
+      true;
+
+    const renderConfidence = () => {
+      if (!alert) return null;
+
+      if (alert.confidence === null || alert.confidence === undefined || alert.confidence < 0) {
+        return (
+          <Text
+            style={[
+              GlobalStyles.text_secondary,
+              { color: "#cbd5e1", marginTop: 5 },
+            ]}
+          >
+            First appearance
+          </Text>
+        );
+      }
+
+      const rounded = Math.round(alert.confidence);
+      const label = isTemporaryUser
+        ? `Match: ${rounded}%`
+        : `Confidence: ${rounded}%`;
+
+      return (
+        <Text
+          style={[
+            GlobalStyles.text_secondary,
+            { color: getConfidenceColor(alert.confidence), marginTop: 5 },
+          ]}
+        >
+          {label}
+        </Text>
+      );
+    };
+
   useEffect(() => {
     const loadAlert = async () => {
       const cachedAlerts = await getAlertsFromCache();
@@ -169,14 +207,7 @@ function AlertMax() {
           <Text style={GlobalStyles.text_secondary}>{alert.date}</Text>
         </View>
 
-        <Text
-          style={[
-            GlobalStyles.text_secondary,
-            { color: getConfidenceColor(alert.confidence), marginTop: 5 },
-          ]}
-        >
-          Confidence: {Math.round(alert.confidence)}%
-        </Text>
+        {renderConfidence()}
 
         <View
           style={[

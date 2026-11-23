@@ -73,74 +73,74 @@ function UserMax() {
   };
 
   const handleSaveName = async () => {
-    if (!user) return;
+      if (!user) return;
 
-    const newName = editedName.trim();
-    if (!newName) {
-      Alert.alert("Invalid name", "Name cannot be empty.");
-      return;
-    }
+      const newName = editedName.trim();
+      if (!newName) {
+        Alert.alert("Invalid name", "Name cannot be empty.");
+        return;
+      }
 
-    if (newName === user.name) {
-      setNameEditorVisible(false);
-      return;
-    }
+      if (newName === user.name) {
+        setNameEditorVisible(false);
+        return;
+      }
 
-    setSavingName(true);
-    try {
-      await updateUserName(user.id, newName);
-      setUser((prev) => (prev ? { ...prev, name: newName } : prev));
-      setNameEditorVisible(false);
-    } catch (error) {
-      console.error("Błąd zmiany imienia użytkownika:", error);
-      Alert.alert("Error", "Could not update the user's name.");
-    } finally {
-      setSavingName(false);
-    }
-  };
+      setSavingName(true);
+      try {
+        await updateUserName(user.id, newName);
+        setUser((prev) => (prev ? { ...prev, name: newName } : prev));
+        setNameEditorVisible(false);
+      } catch (error) {
+        console.error("Failed to update user name:", error);
+        Alert.alert("Error", "Could not update the user's name.");
+      } finally {
+        setSavingName(false);
+      }
+    };
 
-  const handleToggleTrust = async () => {
-    if (!user) return;
+    const handleToggleTrust = async () => {
+      if (!user) return;
 
-    const newStatus = !user.is_trusted;
+      const newStatus = !user.is_trusted;
 
-    try {
-      const data = await updateUserTrust(user.id, newStatus);
+      try {
+        const data = await updateUserTrust(user.id, newStatus);
 
-      setUser((prev) =>
-        prev
-          ? {
-              ...prev,
-              is_trusted: data.is_trusted,
-              is_temporary: data.is_temporary,
-            }
-          : prev,
-      );
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                is_trusted: data.is_trusted,
+                is_temporary: data.is_temporary,
+              }
+            : prev,
+        );
 
-      Alert.alert(
-        "Status użytkownika",
-        data.is_trusted
-          ? `${user.name} jest teraz użytkownikiem zaufanym.`
-          : `${user.name} jest teraz użytkownikiem niezaufanym.`,
-      );
-    } catch (error) {
-      console.error("Błąd zmiany statusu zaufania:", error);
-      Alert.alert("Błąd", "Nie udało się zmienić statusu użytkownika.");
-    }
-  };
+        Alert.alert(
+          "Trust status updated",
+          data.is_trusted
+            ? `${user.name} is now a trusted user.`
+            : `${user.name} is now an untrusted user.`,
+        );
+      } catch (error) {
+        console.error("Failed to update user trust status:", error);
+        Alert.alert("Error", "Could not update user trust status.");
+      }
+    };
 
-  const handleSetPermanent = async () => {
-    if (!user || !user.is_temporary) return;
+    const handleSetPermanent = async () => {
+      if (!user || !user.is_temporary) return;
 
-    try {
-      await saveTemporaryUser(user.id, user.name);
-      setUser((prev) => (prev ? { ...prev, is_temporary: false } : prev));
-      Alert.alert("User updated", `${user.name} is now permanent.`);
-    } catch (error) {
-      console.error("Błąd zapisywania użytkownika:", error);
-      Alert.alert("Error", "Could not set the user as permanent.");
-    }
-  };
+      try {
+        await saveTemporaryUser(user.id, user.name);
+        setUser((prev) => (prev ? { ...prev, is_temporary: false } : prev));
+        Alert.alert("User updated", `${user.name} is now permanent.`);
+      } catch (error) {
+        console.error("Failed to save temporary user:", error);
+        Alert.alert("Error", "Could not set the user as permanent.");
+      }
+    };
 
   useFocusEffect(
     useCallback(() => {
@@ -203,35 +203,40 @@ function UserMax() {
         <Image source={imageSource} style={styles.image} />
       </Pressable>
 
-      <View
-        style={[
-          styles.button_container,
-          user.is_temporary && styles.permanent_action_container,
-        ]}
-      >
+      <View style={styles.button_container}>
         <CircleButton
           iconName="delete"
           onPress={() => handleDelete(user.name)}
         />
-        {user.is_temporary ? (
+        <CircleButton iconName="plus" onPress={addImage} />
+        <CircleButton iconName="download" />
+      </View>
+
+      <View style={styles.action_buttons_container}>
+        {user.is_temporary && (
           <Pressable
             style={({ pressed }) => [
+              styles.action_button,
               styles.permanent_button,
               pressed && GlobalStyles.pressed,
             ]}
             onPress={handleSetPermanent}
           >
-            <Text style={styles.permanent_button_text}>
-              Set as permanent
-            </Text>
+            <Text style={styles.action_button_text}>Set as permanent</Text>
           </Pressable>
-        ) : (
-          <CircleButton iconName="download" />
         )}
-      </View>
-      <View style={styles.button_container}>
-        <CircleButton iconName="plus" onPress={addImage} />
-        <CircleButton iconName="retweet" onPress={handleToggleTrust} />
+        <Pressable
+          style={({ pressed }) => [
+            styles.action_button,
+            user.is_trusted ? styles.untrust_button : styles.trust_button,
+            pressed && GlobalStyles.pressed,
+          ]}
+          onPress={handleToggleTrust}
+        >
+          <Text style={styles.action_button_text}>
+            {user.is_trusted ? "Remove trust" : "Trust user"}
+          </Text>
+        </Pressable>
       </View>
 
       <Modal visible={isGalleryVisble} transparent={true} animationType="fade">
@@ -312,7 +317,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xl,
   },
   button_container: {
-    width: "70%",
+    width: "90%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
@@ -321,15 +326,14 @@ const styles = StyleSheet.create({
   permanent_action_container: {
     width: "90%",
   },
-  permanent_button: {
+  action_button: {
     flex: 1,
-    minHeight: 80,
+    minHeight: 56,
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: SPACING.xs,
     paddingHorizontal: SPACING.s,
+    paddingVertical: SPACING.s,
     borderRadius: 15,
-    backgroundColor: COLORS.secondary,
   },
   permanent_button_text: {
     color: "#fff",
@@ -419,6 +423,28 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  action_buttons_container: {
+    width: "90%",
+    flexDirection: "row",
+    gap: SPACING.s,
+    marginTop: SPACING.m,
+  },
+  permanent_button: {
+    backgroundColor: COLORS.secondary,
+  },
+  trust_button: {
+    backgroundColor: "#16a34a",
+  },
+  untrust_button: {
+    backgroundColor: "#dc2626",
+  },
+  action_button_text: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "center",
+    flexShrink: 1,
   },
 });
 

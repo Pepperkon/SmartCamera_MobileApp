@@ -124,7 +124,7 @@ export const updateUserTrust = async (
   );
 
   if (!response.ok) {
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || `HTTP ${response.status}`);
   }
 
@@ -141,7 +141,7 @@ export const saveTemporaryUser = async (
   );
 
   if (!response.ok) {
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || `HTTP ${response.status}`);
   }
 
@@ -158,7 +158,7 @@ export const updateUserName = async (
   );
 
   if (!response.ok) {
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || `HTTP ${response.status}`);
   }
 

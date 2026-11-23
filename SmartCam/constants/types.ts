@@ -14,7 +14,7 @@ export interface AlertItem {
   user?: {
     is_temporary: boolean | null;
   } | null;
-  confidence: number;
+  confidence: number | null;
   location?: [number, number, number, number] | null;
 }
 
