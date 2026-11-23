@@ -3,7 +3,10 @@ import { AlertItem } from "@/constants/types";
 import {
   deleteAlert,
   deleteAlertFromCache,
+  fetchAlerts,
   getAlertsFromCache,
+  markAsReadOnServer,
+  saveAlertsToCache,
 } from "@/services/alertService";
 import { GlobalStyles } from "@/styles/GlobalStyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -96,29 +99,69 @@ function AlertMax() {
     };
 
   useEffect(() => {
-    const loadAlert = async () => {
-      const cachedAlerts = await getAlertsFromCache();
-      if (cachedAlerts) {
-        const found = cachedAlerts.find((a) => String(a.id) === String(id));
-        setAlert(found || null);
+    let active = true;
 
-        if (found && typeof found.image === "string") {
+    const loadAlert = async () => {
+      const alertId = Array.isArray(id) ? id[0] : id;
+      if (!alertId) {
+        if (active) setLoading(false);
+        return;
+      }
+
+      let alertsList = await getAlertsFromCache();
+      let found = alertsList?.find((a) => String(a.id) === String(alertId));
+
+      if (!found) {
+        const freshAlerts = await fetchAlerts();
+        if (freshAlerts.length > 0) {
+          alertsList = freshAlerts;
+          await saveAlertsToCache(freshAlerts);
+          found = freshAlerts.find((a) => String(a.id) === String(alertId));
+        }
+      }
+
+      if (!active) return;
+
+      if (found) {
+        if (found.isNew) {
+          found = { ...found, isNew: false };
+          void markAsReadOnServer(String(found.id));
+          if (alertsList) {
+            const updatedCache = alertsList.map((a) =>
+              String(a.id) === String(found!.id) ? { ...a, isNew: false } : a,
+            );
+            void saveAlertsToCache(updatedCache);
+          }
+        }
+
+        setAlert(found);
+
+        if (typeof found.image === "string") {
           const uri = `${API_URL}/data/images/captured/${found.image}`;
           Image.getSize(
             uri,
             (width, height) => {
-              setImgDimensions({ width, height });
+              if (active) {
+                setImgDimensions({ width, height });
+              }
             },
             (error) => {
               console.error("Error retrieving photo size:", error);
             },
           );
         }
+      } else {
+        setAlert(null);
       }
+
       setLoading(false);
     };
 
-    loadAlert();
+    void loadAlert();
+
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   if (loading) {
