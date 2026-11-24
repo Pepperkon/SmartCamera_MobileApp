@@ -80,6 +80,37 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
             # This user is untrusted and temporary
             # This means that when all their alerts are deleted the user is also deleted
             if user_id is None:
+                det_conf = res.get("det_confidence", 1.0)
+                if det_conf < 0.78:
+                    print(
+                        f"[RECOGNIZE] Skipping new stranger creation: low det_confidence={det_conf:.3f}"
+                    )
+                    continue
+
+                session_stranger_key = f"session:{session_id}:stranger"
+                existing_stranger_id = (
+                    await redis.get(session_stranger_key) if len(results) == 1 else None
+                )
+
+                if existing_stranger_id is not None:
+                    stranger_id = int(existing_stranger_id)
+                    best_sim = res.get("best_sim")
+                    if best_sim is not None and best_sim >= 0.20:
+                        img_bytes = await asyncio.to_thread(
+                            _process_file_writing, contents, (left, top, right, bottom)
+                        )
+                        await add_user_image_logic(stranger_id, img_bytes, res["encoding"], session)
+                        await session.commit()
+                        new_template_added = True
+                        print(
+                            f"[RECOGNIZE] Added extra template to session stranger ID: {stranger_id} (sim={best_sim:.3f})"
+                        )
+                    else:
+                        print(
+                            f"[RECOGNIZE] Skipping duplicate stranger creation in session {session_id}"
+                        )
+                    continue
+
                 print("[RECOGNIZE] Decision: Face is unknown. Creating a temporary user.")
                 new_user = User(name="Stranger")
                 session.add(new_user)
@@ -90,6 +121,8 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
                 assert new_user.id is not None, "Fresh user_id cannot be None"
                 user_id = new_user.id
                 is_first_appearance = True
+                if len(results) == 1:
+                    await redis.set(session_stranger_key, str(user_id), ex=120)
                 print(f"[RECOGNIZE] Success: Created new user with ID: {user_id}")
 
             print(

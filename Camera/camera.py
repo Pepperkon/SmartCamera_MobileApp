@@ -21,8 +21,6 @@ def take_photo(filename):
 
     print(f"📸 Przechwytywanie obrazu przez rpicam-still do {filename}...")
     try:
-        # -n: brak podglądu, -o: wyjście, -t 1: czekaj 1ms (szybkie zdjęcie)
-        # --immediate: nie czekaj na stabilizację (jeśli zależy Ci na czasie)
         subprocess.run(
             [
                 "rpicam-still",
@@ -30,11 +28,19 @@ def take_photo(filename):
                 filename,
                 "-n",
                 "-t",
-                "500",  # 500ms na ustawienie ostrości/światła
+                "1500",
                 "--width",
-                "1280",
+                "1640",
                 "--height",
-                "720",
+                "1232",
+                "--quality",
+                "95",
+                "--exposure",
+                "normal",
+                "--sharpness",
+                "1.3",
+                "--denoise",
+                "cdn_fast",
             ],
             check=True,
         )

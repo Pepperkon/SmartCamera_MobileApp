@@ -20,7 +20,7 @@ def movement_detected():
     session_id = secrets.token_hex(16)
 
     for i in range(1, 6):
-        current_filename = f"temp_{i}.jpg"
+        current_filename = f"temp_{session_id}_{i}.jpg"
         camera.execute(session_id, current_filename)
         time.sleep(2)
 
