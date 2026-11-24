@@ -81,7 +81,7 @@ class CFaceEngine:
             raise RuntimeError(f"Engine initialization failed with code {status}")
 
     def detect_and_encode(
-        self, image_bytes: bytes, score_thresh: float = 0.6, nms_thresh: float = 0.3
+        self, image_bytes: bytes, score_thresh: float = 0.65, nms_thresh: float = 0.3
     ) -> list[dict]:
         if not image_bytes:
             raise ValueError("Empty image buffer")

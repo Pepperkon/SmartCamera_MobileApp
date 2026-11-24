@@ -1,5 +1,5 @@
 import { COLORS, SPACING, TRUST_COLORS } from "@/constants/theme";
-import { AlertItem } from "@/constants/types";
+import { AlertItem, User, UserMergeResult } from "@/constants/types";
 import {
   deleteAlert,
   deleteAlertFromCache,
@@ -13,21 +13,27 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   StyleSheet,
   Text,
   View,
   ScrollView,
+  Pressable,
 } from "react-native";
 import CircleButton from "./circleButton";
 import NotificationMark from "./notificationMark";
 import { API_URL } from "@/constants/api";
+import UserMergeModal from "./userMergeModal";
 
 function AlertMax() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const [alert, setAlert] = useState<AlertItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mergeSource, setMergeSource] = useState<User | null>(null);
+  const [mergeVisible, setMergeVisible] = useState(false);
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
 
   const [imgDimensions, setImgDimensions] = useState<{
     width: number;
@@ -64,6 +70,41 @@ function AlertMax() {
       alert?.user?.is_temporary ??
       alert?.recognised_user_is_temporary ??
       true;
+
+  const openMerge = async () => {
+    if (!alert?.recognised_user_id) return;
+    try {
+      const response = await fetch(
+        `${API_URL}/users/${alert.recognised_user_id}`,
+      );
+      if (!response.ok) {
+        throw new Error(`Could not load source profile (HTTP ${response.status})`);
+      }
+      setMergeSource(await response.json());
+      setMergeVisible(true);
+    } catch (error) {
+      console.error("Could not open merge dialog:", error);
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Could not load the source profile.",
+      );
+    }
+  };
+
+  const handleMerged = (result: UserMergeResult) => {
+    setMergeVisible(false);
+    setAlert((current) =>
+      current
+        ? {
+            ...current,
+            title: `Recognized: ${result.target_user.name}`,
+            recognised_user_id: Number(result.target_user.id),
+            recognised_user_is_temporary: false,
+            user: { is_temporary: false },
+          }
+        : current,
+    );
+  };
 
     const renderConfidence = () => {
       if (!alert) return null;
@@ -266,11 +307,65 @@ function AlertMax() {
           {renderBoundingBox()}
         </View>
 
+        {isTemporaryUser && alert.recognised_user_id != null && (
+          <View style={styles.mergeSection}>
+            {alert.suggested_match && !suggestionDismissed && (
+              <View style={styles.suggestion}>
+                {alert.suggested_match.avatar_url && (
+                  <Image
+                    source={{
+                      uri: alert.suggested_match.avatar_url.startsWith("http")
+                        ? alert.suggested_match.avatar_url
+                        : `${API_URL}${alert.suggested_match.avatar_url}`,
+                    }}
+                    style={styles.suggestionAvatar}
+                  />
+                )}
+                <View style={styles.suggestionText}>
+                  <Text style={styles.suggestionTitle}>
+                    Podobny do: {alert.suggested_match.name} • profil #
+                    {alert.suggested_match.user_id}
+                  </Text>
+                  <Text style={styles.suggestionDetail}>
+                    Potwierdź, czy to ta sama osoba
+                  </Text>
+                </View>
+                <Pressable onPress={() => void openMerge()}>
+                  <Text style={styles.suggestionAction}>Tak, połącz</Text>
+                </Pressable>
+                <Pressable onPress={() => setSuggestionDismissed(true)}>
+                  <Text style={styles.suggestionAction}>Nie</Text>
+                </Pressable>
+              </View>
+            )}
+            {(suggestionDismissed || !alert.suggested_match) && (
+              <Pressable
+                style={styles.mergeButton}
+                onPress={() => void openMerge()}
+              >
+                <Text style={styles.mergeButtonText}>
+                  Przypisz do użytkownika
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
         <View style={styles.button_container}>
           <CircleButton iconName="delete" onPress={handleDelete} />
           <CircleButton iconName="download" />
         </View>
       </ScrollView>
+      {mergeSource && (
+        <UserMergeModal
+          visible={mergeVisible}
+          source={mergeSource}
+          detectionConfidence={alert.detection_confidence}
+          suggestedUserId={alert.suggested_match?.user_id}
+          onClose={() => setMergeVisible(false)}
+          onMerged={handleMerged}
+        />
+      )}
     </View>
   );
 }
@@ -332,6 +427,50 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 10,
     width: "100%",
+  },
+  mergeSection: {
+    width: "92%",
+    marginBottom: SPACING.m,
+  },
+  suggestion: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "#1e293b",
+  },
+  suggestionAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
+  suggestionText: {
+    flex: 1,
+  },
+  suggestionTitle: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  suggestionDetail: {
+    color: "#cbd5e1",
+    fontSize: 12,
+  },
+  suggestionAction: {
+    color: "#93c5fd",
+    fontWeight: "700",
+    padding: 5,
+  },
+  mergeButton: {
+    padding: 12,
+    alignItems: "center",
+    borderRadius: 10,
+    backgroundColor: "#254e6b",
+  },
+  mergeButtonText: {
+    color: "#fff",
+    fontWeight: "700",
   },
 });
 

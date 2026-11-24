@@ -298,6 +298,61 @@ static Tensor resize_nn_asymmetric(const Tensor *t, const uint32_t new_width, co
     return res;
 }
 
+static Tensor resize_bilinear_letterbox(const Tensor *t, const uint32_t target_w, const uint32_t target_h, float *out_scale) {
+    const float scale_w = (float)target_w / (float)t->width;
+    const float scale_h = (float)target_h / (float)t->height;
+    const float scale = (scale_w < scale_h) ? scale_w : scale_h;
+    *out_scale = scale;
+
+    const uint32_t new_w = (uint32_t)roundf((float)t->width * scale);
+    const uint32_t new_h = (uint32_t)roundf((float)t->height * scale);
+
+    const Tensor res = create_Tensor(t->batch, t->channel, target_h, target_w);
+    const size_t dst_plane = (size_t)target_h * target_w;
+    const size_t src_plane = (size_t)t->height * t->width;
+
+    for (uint32_t c = 0; c < t->channel; ++c) {
+        const float *src = t->data + c * src_plane;
+        float *dst = res.data + c * dst_plane;
+
+        for (uint32_t y = 0; y < target_h; ++y) {
+            for (uint32_t x = 0; x < target_w; ++x) {
+                if (x >= new_w || y >= new_h) {
+                    dst[y * target_w + x] = 0.0f;
+                    continue;
+                }
+
+                float src_x = ((float)x + 0.5f) / scale - 0.5f;
+                float src_y = ((float)y + 0.5f) / scale - 0.5f;
+                if (src_x < 0.0f) src_x = 0.0f;
+                if (src_y < 0.0f) src_y = 0.0f;
+                if (src_x > (float)(t->width - 1)) src_x = (float)(t->width - 1);
+                if (src_y > (float)(t->height - 1)) src_y = (float)(t->height - 1);
+
+                const int x0 = (int)floorf(src_x);
+                const int y0 = (int)floorf(src_y);
+                const int x1 = (x0 + 1 < (int)t->width) ? x0 + 1 : x0;
+                const int y1 = (y0 + 1 < (int)t->height) ? y0 + 1 : y0;
+                const float fx = src_x - (float)x0;
+                const float fy = src_y - (float)y0;
+
+                const float v00 = src[y0 * t->width + x0];
+                const float v10 = src[y0 * t->width + x1];
+                const float v01 = src[y1 * t->width + x0];
+                const float v11 = src[y1 * t->width + x1];
+
+                dst[y * target_w + x] =
+                    (1.0f - fx) * (1.0f - fy) * v00 +
+                    fx * (1.0f - fy) * v10 +
+                    (1.0f - fx) * fy * v01 +
+                    fx * fy * v11;
+            }
+        }
+    }
+
+    return res;
+}
+
 // ===============================
 
 // ====> Batch Normalization <====
@@ -1265,8 +1320,9 @@ static bool extract_face_feature(const Network *sface_net, const Tensor *aligned
     memcpy(input_face.data, aligned_face->data, bytes);
 
     NetworkOutputs sface_outs = forward_network(sface_net, &input_face);
-    const Tensor *feat_tensor = find_output_tensor(&sface_outs, "fc1");
+    free_tensor(&input_face);
 
+    const Tensor *feat_tensor = find_output_tensor(&sface_outs, "fc1");
     if (!feat_tensor || (feat_tensor->channel * feat_tensor->batch != 128)) {
         fprintf(stderr, "[-] ERROR: Nie znaleziono tensora wyjsciowego 'fc1' (128D) w SFace!\n");
         free_network_outputs(&sface_outs);
@@ -1337,10 +1393,11 @@ CInferenceResult process_image_memory(const unsigned char *img_bytes, int byte_l
     }
 
     Tensor yunet_input;
+    float letterbox_scale = 1.0f;
     if (orig_w == 640 && orig_h == 640) {
         yunet_input = raw_tensor;
     } else {
-        yunet_input = resize_nn_asymmetric(&raw_tensor, 640, 640);
+        yunet_input = resize_bilinear_letterbox(&raw_tensor, 640, 640, &letterbox_scale);
         free_tensor(&raw_tensor);
     }
 
@@ -1368,8 +1425,8 @@ CInferenceResult process_image_memory(const unsigned char *img_bytes, int byte_l
         return result;
     }
 
-    const float scale_x = (float)orig_w / 640.0f;
-    const float scale_y = (float)orig_h / 640.0f;
+    const float scale_x = 1.0f / letterbox_scale;
+    const float scale_y = 1.0f / letterbox_scale;
     int valid_count = 0;
 
     // 3. Align face and extract features (SFace) for each detected face

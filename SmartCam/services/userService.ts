@@ -1,5 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
-import { User } from "@/constants/types";
+import { User, UserMergeResult } from "@/constants/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "@/constants/api";
 
@@ -26,6 +26,45 @@ export const fetchUsers = async (
     console.log("Błąd pobierania użytkowników z FastAPI:", e);
     return [];
   }
+};
+
+export const fetchPermanentUsers = async (): Promise<User[]> => {
+  const users: User[] = [];
+  const pageSize = 100;
+  for (let offset = 0; ; offset += pageSize) {
+    const response = await fetch(
+      `${API_URL}/users?is_temporary=false&limit=${pageSize}&offset=${offset}`,
+    );
+    if (!response.ok) {
+      throw new Error(`Could not load permanent users (HTTP ${response.status})`);
+    }
+    const page: User[] = await response.json();
+    users.push(...page);
+    if (page.length < pageSize) return users;
+  }
+};
+
+export const mergeUsers = async (
+  sourceUserId: number | string,
+  targetUserId: number | string,
+  includeTemplates: boolean,
+): Promise<UserMergeResult> => {
+  const response = await fetch(`${API_URL}/users/merge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      source_user_id: Number(sourceUserId),
+      target_user_id: Number(targetUserId),
+      include_templates: includeTemplates,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
 };
 
 export const saveUsersToCache = async (

@@ -35,6 +35,8 @@ class AlertRead(SQLModel):
     user: AlertUserStatus | None = None
     embedding: list[float] | None
     confidence: float | None = Field(default=None)
+    detection_confidence: float | None = None
+    suggested_match: dict | None = None
     location: list[int] | None
 
     @field_validator("confidence", mode="before")
@@ -58,6 +60,13 @@ class UserRead(SQLModel):
     alerts: list[AlertRead] = []
     is_trusted: bool
     is_temporary: bool
+    suggested_match: dict | None = None
+
+
+class UserMergeRequest(SQLModel):
+    source_user_id: int
+    target_user_id: int
+    include_templates: bool
 
 
 class PushTokenRegistration(SQLModel):
@@ -84,6 +93,7 @@ class Alert(SQLModel, table=True):
     embedding: list[float] | None = Field(sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=lambda: datetime.now())
     confidence: float = Field(default=0.0)
+    detection_confidence: float | None = Field(default=None)
     location: list[int] | None = Field(default=None, sa_column=Column(JSON))
 
 
@@ -98,7 +108,10 @@ class FaceTemplate(SQLModel, table=True):
 class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
-    images: list["FaceTemplate"] = Relationship(back_populates="user")
+    images: list["FaceTemplate"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"order_by": "FaceTemplate.id"},
+    )
     alerts: list["Alert"] = Relationship(back_populates="user")
     is_trusted: bool = Field(default=False)
     is_temporary: bool = Field(default=True)

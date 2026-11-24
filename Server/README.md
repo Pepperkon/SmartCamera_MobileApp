@@ -73,3 +73,15 @@ This is the central hub of the SmartCam system. It manages the SQLite database, 
     ```bash
     uv add package-name
     ```
+
+## User merge
+
+`POST /users/merge` accepts `source_user_id`, `target_user_id`, and
+`include_templates`. It moves the source user's alert history to a permanent
+target profile, optionally transfers its face templates, then removes the
+source profile. Self-merges and temporary targets are rejected with HTTP 400.
+The model's matching template feed contains permanent users only; low-confidence
+matches in the 0.22–0.32 similarity range are returned as `suggested_match`
+for temporary-user alerts and profiles when detection confidence is at least 0.78.
+The merge response includes the updated target, moved-alert/template counts, and
+any post-commit cleanup or model-sync warnings.

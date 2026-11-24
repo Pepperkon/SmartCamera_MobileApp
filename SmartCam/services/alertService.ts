@@ -13,6 +13,27 @@ export const saveAlertsToCache = async (alerts: AlertItem[]) => {
   }
 };
 
+export const updateAlertsAfterMerge = async (
+  sourceUserId: number | string,
+  targetUser: { id: number | string; name: string },
+) => {
+  const alerts = await getAlertsFromCache();
+  if (!alerts) return;
+
+  const updatedAlerts = alerts.map((alert) =>
+    String(alert.recognised_user_id) === String(sourceUserId)
+      ? {
+          ...alert,
+          title: `Recognized: ${targetUser.name}`,
+          recognised_user_id: Number(targetUser.id),
+          recognised_user_is_temporary: false,
+          user: { is_temporary: false },
+        }
+      : alert,
+  );
+  await saveAlertsToCache(updatedAlerts);
+};
+
 export const getAlertsFromCache = async (): Promise<AlertItem[] | null> => {
   try {
     const jsonValue = await AsyncStorage.getItem(STORAGE_KEY);

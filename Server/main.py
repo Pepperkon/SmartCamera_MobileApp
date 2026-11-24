@@ -1,5 +1,6 @@
 import asyncio
 import io
+import math
 import os
 import re
 import shutil
@@ -21,6 +22,7 @@ from database import (
     PushToken,
     PushTokenRegistration,
     User,
+    UserMergeRequest,
     UserRead,
     async_session_maker,
     engine,
@@ -43,12 +45,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, UnidentifiedImageError
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
+from sqlalchemy import inspect
+from sqlalchemy.orm import selectinload
 from services import (
     add_user_image_logic,
     notify_model_sync,
     save_image_to_disk,
 )
-from sqlalchemy.orm import selectinload
 from sqlmodel import SQLModel, col, delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -133,6 +137,13 @@ async def lifespan(app: FastAPI):
     # Startup: creating sql engine and all of the directories
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        alert_columns = await conn.run_sync(
+            lambda sync_conn: {
+                column["name"] for column in inspect(sync_conn).get_columns("alert")
+            }
+        )
+        if "detection_confidence" not in alert_columns:
+            await conn.exec_driver_sql("ALTER TABLE alert ADD COLUMN detection_confidence FLOAT")
     os.makedirs("data/images/users", exist_ok=True)
     os.makedirs("data/images/captured", exist_ok=True)
     task = asyncio.create_task(cleanup_alerts(interval_seconds=60, max_age_hours=1))
@@ -230,9 +241,69 @@ async def get_encoding_from_model(
 
 # Making it available for the model to get the embeddings of known users
 async def get_templates(session: AsyncSession) -> list[dict[str, Any]]:
-    statement = select(FaceTemplate)
+    statement = select(FaceTemplate).join(User).where(User.is_temporary.is_(False))
     results = (await session.exec(statement)).all()
     return [{"user_id": f.user_id, "embedding": f.embedding} for f in results]
+
+
+async def add_suggested_matches(
+    alerts: list[AlertRead], session: AsyncSession
+) -> None:
+    templates = (
+        await session.exec(
+            select(FaceTemplate, User.name)
+            .join(User, FaceTemplate.user_id == User.id)
+            .where(User.is_temporary.is_(False))
+            .order_by(FaceTemplate.id)
+        )
+    ).all()
+
+    for alert in alerts:
+        embedding = alert.embedding
+        if (
+            alert.recognised_user_is_temporary is not True
+            or embedding is None
+            or alert.detection_confidence is None
+            or alert.detection_confidence < 0.78
+        ):
+            continue
+
+        best_by_user: dict[int, tuple[float, str]] = {}
+        avatar_paths: dict[int, str] = {}
+        for template, name in templates:
+            if template.user_id is None:
+                continue
+            avatar_paths.setdefault(template.user_id, template.filepath)
+            vector = template.embedding
+            if len(vector) != len(embedding):
+                continue
+            dot = math.fsum(left * right for left, right in zip(embedding, vector))
+            left_norm = math.sqrt(math.fsum(value * value for value in embedding))
+            right_norm = math.sqrt(math.fsum(value * value for value in vector))
+            if left_norm == 0 or right_norm == 0:
+                continue
+            similarity = dot / (left_norm * right_norm)
+            current = best_by_user.get(template.user_id)
+            if current is None or similarity > current[0]:
+                best_by_user[template.user_id] = (
+                    similarity,
+                    name,
+                )
+
+        if not best_by_user:
+            continue
+
+        user_id, (similarity, name) = max(
+            best_by_user.items(), key=lambda item: item[1][0]
+        )
+        if 0.22 <= similarity < 0.33:
+            alert.suggested_match = {
+                "user_id": user_id,
+                "name": name,
+                "avatar_url": f"/data/images/users/{user_id}/{avatar_paths[user_id]}",
+                "similarity": round(similarity, 4),
+                "is_permanent": True,
+            }
 
 
 @app.get("/faces/templates", dependencies=[Depends(verify_api_key)])
@@ -271,6 +342,146 @@ async def get_users(
 
     results = (await session.exec(statement)).all()
     return results
+
+
+async def clear_merged_user_redis_state(user_id: int) -> str | None:
+    try:
+        await redis.delete(f"cooldown:user:{user_id}")
+
+        async for key in redis.scan_iter(match="session:*:stranger"):
+            stranger_id = await redis.get(key)
+            if stranger_id in (str(user_id).encode(), str(user_id)):
+                await redis.delete(key)
+
+        async for key in redis.scan_iter(match="session:*"):
+            key_name = key.decode() if isinstance(key, bytes) else key
+            if key_name.endswith(":stranger"):
+                continue
+            if await redis.type(key) == b"set":
+                await redis.srem(key, user_id)
+    except RedisError as error:
+        return f"Redis cleanup failed: {error}"
+    return None
+
+
+@app.post("/users/merge")
+async def merge_users(
+    payload: UserMergeRequest,
+    session: AsyncSession = Depends(get_session),
+    client: httpx.AsyncClient = Depends(get_client),
+) -> dict[str, Any]:
+    if payload.source_user_id == payload.target_user_id:
+        raise HTTPException(status_code=400, detail="Source and target users must differ")
+
+    source = await session.get(User, payload.source_user_id)
+    target = await session.get(User, payload.target_user_id)
+    if source is None or target is None:
+        raise HTTPException(status_code=404, detail="Source or target user not found")
+    if target.is_temporary:
+        raise HTTPException(
+            status_code=400,
+            detail="Target user must be permanent; temporary users cannot be merge targets",
+        )
+
+    source_templates = (
+        await session.exec(
+            select(FaceTemplate).where(FaceTemplate.user_id == payload.source_user_id)
+        )
+    ).all()
+    source_alerts = (
+        await session.exec(
+            select(Alert).where(Alert.recognised_user_id == payload.source_user_id)
+        )
+    ).all()
+
+    source_dir = Path(f"data/images/users/{payload.source_user_id}")
+    target_dir = Path(f"data/images/users/{payload.target_user_id}")
+    moved_files: list[tuple[Path, Path]] = []
+    discarded_files: list[Path] = []
+
+    try:
+        for template in source_templates:
+            old_path = source_dir / template.filepath
+            if payload.include_templates:
+                new_path = target_dir / template.filepath
+                if old_path.is_file():
+                    new_path.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(old_path, new_path)
+                    moved_files.append((old_path, new_path))
+                template.user_id = payload.target_user_id
+                session.add(template)
+            else:
+                if old_path.is_file():
+                    discarded_files.append(old_path)
+                await session.delete(template)
+
+        for alert in source_alerts:
+            alert.recognised_user_id = payload.target_user_id
+            alert.title = f"Recognized: {target.name}"
+            session.add(alert)
+
+        await session.flush()
+        await session.delete(source)
+        await session.flush()
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        for old_path, new_path in reversed(moved_files):
+            if new_path.exists():
+                old_path.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(new_path, old_path)
+        raise
+
+    warnings: list[str] = []
+    for path in discarded_files:
+        if path.exists():
+            try:
+                path.unlink()
+            except OSError as error:
+                warnings.append(f"Template cleanup failed for {path}: {error}")
+    if source_dir.exists():
+        try:
+            shutil.rmtree(source_dir)
+        except OSError as error:
+            warnings.append(f"Source directory cleanup failed: {error}")
+
+    redis_warning = await clear_merged_user_redis_state(payload.source_user_id)
+    if redis_warning:
+        warnings.append(redis_warning)
+    if MODEL_URL:
+        try:
+            response = await client.post(
+                f"{MODEL_URL}/sync",
+                headers={"X-Internal-Token": INTERNAL_API_KEY},
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as error:
+            warnings.append(f"Model synchronization failed: {error}")
+
+    target_statement = (
+        select(User)
+        .where(User.id == payload.target_user_id)
+        .options(selectinload(User.images), selectinload(User.alerts))
+    )
+    updated_target = (await session.exec(target_statement)).first()
+    if updated_target is None:
+        raise HTTPException(status_code=500, detail="Merged target user could not be loaded")
+
+    await manager.broadcast(
+        {
+            "type": "user_merged",
+            "source_user_id": payload.source_user_id,
+            "target_user_id": payload.target_user_id,
+            "target_name": updated_target.name,
+            "target_is_trusted": updated_target.is_trusted,
+        }
+    )
+    return {
+        "target_user": UserRead.model_validate(updated_target).model_dump(mode="json"),
+        "moved_alerts": len(source_alerts),
+        "added_templates": len(source_templates) if payload.include_templates else 0,
+        "warnings": warnings,
+    }
 
 
 # Creating a new user
@@ -436,7 +647,28 @@ async def get_user(user_id: int, session: AsyncSession = Depends(get_session)):
     if not user:
         raise HTTPException(status_code=404, detail="Użytkownik nie istnieje")
 
-    return user
+    user_read = UserRead.model_validate(user)
+    if user.is_temporary:
+        ordered_alerts = sorted(
+            user.alerts,
+            key=lambda alert: alert.created_at,
+            reverse=True,
+        )
+        alert_reads = []
+        for alert in ordered_alerts:
+            alert_read = AlertRead.model_validate(alert.model_dump())
+            alert_read.recognised_user_is_temporary = True
+            alert_reads.append(alert_read)
+        await add_suggested_matches(alert_reads, session)
+        user_read.suggested_match = next(
+            (
+                alert.suggested_match
+                for alert in alert_reads
+                if alert.suggested_match is not None
+            ),
+            None,
+        )
+    return user_read
 
 
 # Returns the list of all alerts
@@ -468,6 +700,7 @@ async def get_alerts(
             )
         result.append(alert_read)
 
+    await add_suggested_matches(result, session)
     return result
 
 
@@ -700,7 +933,10 @@ async def update_user_name(
 # Upgrading a temporary user to a permanent one and updating their old alerts
 @app.patch("/users/{user_id}")
 async def save_temporary_user(
-    user_id: int, name: str, session: AsyncSession = Depends(get_session)
+    user_id: int,
+    name: str,
+    session: AsyncSession = Depends(get_session),
+    client: httpx.AsyncClient = Depends(get_client),
 ) -> dict[str, str]:
     user = await session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
     if not user:
@@ -725,13 +961,19 @@ async def save_temporary_user(
 
     await session.commit()
 
+    if MODEL_URL:
+        await notify_model_sync(MODEL_URL, client)
+
     return {"message": f"User {user.name} saved"}
 
 
 # Changing user's trust status
 @app.patch("/users/{user_id}/trust")
 async def update_trust_status(
-    user_id: int, is_trusted: bool, session: AsyncSession = Depends(get_session)
+    user_id: int,
+    is_trusted: bool,
+    session: AsyncSession = Depends(get_session),
+    client: httpx.AsyncClient = Depends(get_client),
 ) -> dict[str, Any]:
     user = await session.get(User, user_id, options=[selectinload(User.alerts)])  # type: ignore
     if not user:
@@ -755,6 +997,9 @@ async def update_trust_status(
             alert_updates.append({"type": "updated_alert", "alert": alert_dict})
 
     await session.commit()
+
+    if was_temporary and not user.is_temporary and MODEL_URL:
+        await notify_model_sync(MODEL_URL, client)
 
     for alert_update in alert_updates:
         await manager.broadcast(alert_update)

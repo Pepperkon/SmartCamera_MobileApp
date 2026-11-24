@@ -10,6 +10,7 @@ from auth import INTERNAL_API_KEY
 from database import (
     Alert,
     AlertRead,
+    FaceTemplate,
     User,
     async_session_maker,
 )
@@ -21,6 +22,7 @@ from services import (
     mark_recognised,
     notify_model_sync,
 )
+from sqlmodel import select
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8000")
@@ -80,6 +82,37 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
             # This user is untrusted and temporary
             # This means that when all their alerts are deleted the user is also deleted
             if user_id is None:
+                det_conf = res.get("det_confidence", 1.0)
+                if det_conf < 0.78:
+                    print(
+                        f"[RECOGNIZE] Skipping new stranger creation: low det_confidence={det_conf:.3f}"
+                    )
+                    continue
+
+                session_stranger_key = f"session:{session_id}:stranger"
+                existing_stranger_id = (
+                    await redis.get(session_stranger_key) if len(results) == 1 else None
+                )
+
+                if existing_stranger_id is not None:
+                    stranger_id = int(existing_stranger_id)
+                    best_sim = res.get("best_sim")
+                    if best_sim is not None and best_sim >= 0.20:
+                        img_bytes = await asyncio.to_thread(
+                            _process_file_writing, contents, (left, top, right, bottom)
+                        )
+                        await add_user_image_logic(stranger_id, img_bytes, res["encoding"], session)
+                        await session.commit()
+                        new_template_added = True
+                        print(
+                            f"[RECOGNIZE] Added extra template to session stranger ID: {stranger_id} (sim={best_sim:.3f})"
+                        )
+                    else:
+                        print(
+                            f"[RECOGNIZE] Skipping duplicate stranger creation in session {session_id}"
+                        )
+                    continue
+
                 print("[RECOGNIZE] Decision: Face is unknown. Creating a temporary user.")
                 new_user = User(name="Stranger")
                 session.add(new_user)
@@ -90,6 +123,8 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
                 assert new_user.id is not None, "Fresh user_id cannot be None"
                 user_id = new_user.id
                 is_first_appearance = True
+                if len(results) == 1:
+                    await redis.set(session_stranger_key, str(user_id), ex=120)
                 print(f"[RECOGNIZE] Success: Created new user with ID: {user_id}")
 
             print(
@@ -144,6 +179,7 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
                 recognised_user_id=user_id,
                 embedding=res["encoding"],
                 confidence=confidence,
+                detection_confidence=res.get("det_confidence"),
                 location=[top, right, bottom, left],
             )
             session.add(new_alert)
@@ -154,6 +190,35 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
             alert_dict["recognised_user_is_trusted"] = user.is_trusted
             alert_dict["recognised_user_is_temporary"] = user.is_temporary
             alert_dict["user"] = {"is_temporary": user.is_temporary}
+            best_known_id = res.get("best_known_id")
+            best_known_sim = res.get("best_sim")
+            if (
+                user.is_temporary
+                and best_known_id is not None
+                and best_known_sim is not None
+                and 0.22 <= best_known_sim < 0.33
+                and res.get("det_confidence", 0.0) >= 0.78
+            ):
+                suggested_user = await session.get(User, best_known_id)
+                if suggested_user is not None and not suggested_user.is_temporary:
+                    avatar = (
+                        await session.exec(
+                            select(FaceTemplate)
+                            .where(FaceTemplate.user_id == best_known_id)
+                            .order_by(FaceTemplate.id)
+                        )
+                    ).first()
+                    alert_dict["suggested_match"] = {
+                        "user_id": suggested_user.id,
+                        "name": suggested_user.name,
+                        "avatar_url": (
+                            f"/data/images/users/{suggested_user.id}/{avatar.filepath}"
+                            if avatar is not None
+                            else None
+                        ),
+                        "similarity": best_known_sim,
+                        "is_permanent": True,
+                    }
             server_broadcast_url = os.environ.get("SERVER_URL", "http://server-api:8000")
             try:
                 await client.post(
