@@ -25,6 +25,7 @@ import {
 import { User } from "@/constants/types";
 import { API_URL } from "@/constants/api";
 import CircleButton from "./circleButton";
+import UserMergeModal from "./userMergeModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -37,6 +38,7 @@ function UserMax() {
   const [isNameEditorVisible, setNameEditorVisible] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [isSavingName, setSavingName] = useState(false);
+  const [isMergeVisible, setMergeVisible] = useState(false);
 
   const handleDelete = (userName: string) => {
     Alert.alert(
@@ -179,10 +181,12 @@ function UserMax() {
       </View>
     );
   }
-  const filepath = `${API_URL}/data/images/users/${user.id}/${user.images[0].filepath}`;
-  const imageSource = typeof user.images[0]
-    ? { uri: filepath }
-    : { uri: "https://ui-avatars.com/api/?name=" + user.name };
+  const primaryImage = user.images?.[0];
+  const imageSource = primaryImage
+    ? {
+        uri: `${API_URL}/data/images/users/${user.id}/${primaryImage.filepath}`,
+      }
+    : { uri: "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.name) };
 
   return (
     <View
@@ -238,6 +242,16 @@ function UserMax() {
           </Text>
         </Pressable>
       </View>
+      {user.is_temporary && (
+        <Pressable
+          style={[styles.action_button, styles.merge_button]}
+          onPress={() => setMergeVisible(true)}
+        >
+          <Text style={styles.action_button_text}>
+            Przypisz do stałego użytkownika
+          </Text>
+        </Pressable>
+      )}
 
       <Modal visible={isGalleryVisble} transparent={true} animationType="fade">
         <View style={styles.modalContainer}>
@@ -263,6 +277,16 @@ function UserMax() {
           />
         </View>
       </Modal>
+      <UserMergeModal
+        visible={isMergeVisible}
+        source={user}
+        suggestedUserId={user.suggested_match?.user_id}
+        onClose={() => setMergeVisible(false)}
+        onMerged={() => {
+          setMergeVisible(false);
+          router.back();
+        }}
+      />
       <Modal
         visible={isNameEditorVisible}
         transparent
@@ -438,6 +462,11 @@ const styles = StyleSheet.create({
   },
   untrust_button: {
     backgroundColor: "#dc2626",
+  },
+  merge_button: {
+    width: "90%",
+    marginTop: SPACING.s,
+    backgroundColor: "#254e6b",
   },
   action_button_text: {
     color: "#FFFFFF",

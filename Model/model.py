@@ -85,6 +85,7 @@ def _process_identification(engine: CFaceEngine, contents: bytes, known_faces: l
             unknown_encoding = unknown_encoding / norm
 
         user_id = None
+        best_known_id = None
         best_sim = None
         calibrated_conf = 0.0
 
@@ -94,9 +95,10 @@ def _process_identification(engine: CFaceEngine, contents: bytes, known_faces: l
 
             best_match_index = int(np.argmax(similarities))
             best_sim = float(similarities[best_match_index])
+            best_known_id = known_faces[best_match_index]["user_id"]
 
             if best_sim >= SFACE_COSINE_THRESHOLD:
-                user_id = known_faces[best_match_index]["user_id"]
+                user_id = best_known_id
                 calibrated_conf = 0.5 + 0.5 * (
                     (best_sim - SFACE_COSINE_THRESHOLD) / (1.0 - SFACE_COSINE_THRESHOLD)
                 )
@@ -119,6 +121,7 @@ def _process_identification(engine: CFaceEngine, contents: bytes, known_faces: l
         results.append(
             {
                 "user_id": user_id,
+                "best_known_id": best_known_id,
                 "location": det["location"],
                 "encoding": unknown_encoding.tolist(),
                 "confidence": round(calibrated_conf, 4),

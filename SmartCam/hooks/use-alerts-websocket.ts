@@ -65,6 +65,21 @@ export const useAlertsWebSocket = (
                 : a,
             );
             break;
+
+          case "user_merged":
+            updatedAlerts = updatedAlerts.map((a) =>
+              String(a.recognised_user_id) === String(data.source_user_id)
+                ? {
+                    ...a,
+                    title: `Recognized: ${data.target_name}`,
+                    recognised_user_id: data.target_user_id,
+                    recognised_user_is_trusted: data.target_is_trusted,
+                    recognised_user_is_temporary: false,
+                    user: { is_temporary: false },
+                  }
+                : a,
+            );
+            break;
         }
 
         setTimeout(() => saveAlertsToCache(updatedAlerts), 0);

@@ -10,6 +10,7 @@ from auth import INTERNAL_API_KEY
 from database import (
     Alert,
     AlertRead,
+    FaceTemplate,
     User,
     async_session_maker,
 )
@@ -21,6 +22,7 @@ from services import (
     mark_recognised,
     notify_model_sync,
 )
+from sqlmodel import select
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8000")
@@ -177,6 +179,7 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
                 recognised_user_id=user_id,
                 embedding=res["encoding"],
                 confidence=confidence,
+                detection_confidence=res.get("det_confidence"),
                 location=[top, right, bottom, left],
             )
             session.add(new_alert)
@@ -187,6 +190,35 @@ async def process_image_worker(ctx: dict, session_id: str, filename: str) -> Non
             alert_dict["recognised_user_is_trusted"] = user.is_trusted
             alert_dict["recognised_user_is_temporary"] = user.is_temporary
             alert_dict["user"] = {"is_temporary": user.is_temporary}
+            best_known_id = res.get("best_known_id")
+            best_known_sim = res.get("best_sim")
+            if (
+                user.is_temporary
+                and best_known_id is not None
+                and best_known_sim is not None
+                and 0.22 <= best_known_sim < 0.33
+                and res.get("det_confidence", 0.0) >= 0.78
+            ):
+                suggested_user = await session.get(User, best_known_id)
+                if suggested_user is not None and not suggested_user.is_temporary:
+                    avatar = (
+                        await session.exec(
+                            select(FaceTemplate)
+                            .where(FaceTemplate.user_id == best_known_id)
+                            .order_by(FaceTemplate.id)
+                        )
+                    ).first()
+                    alert_dict["suggested_match"] = {
+                        "user_id": suggested_user.id,
+                        "name": suggested_user.name,
+                        "avatar_url": (
+                            f"/data/images/users/{suggested_user.id}/{avatar.filepath}"
+                            if avatar is not None
+                            else None
+                        ),
+                        "similarity": best_known_sim,
+                        "is_permanent": True,
+                    }
             server_broadcast_url = os.environ.get("SERVER_URL", "http://server-api:8000")
             try:
                 await client.post(
