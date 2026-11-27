@@ -46,13 +46,13 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, UnidentifiedImageError
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
-from sqlalchemy import inspect
-from sqlalchemy.orm import selectinload
 from services import (
     add_user_image_logic,
     notify_model_sync,
     save_image_to_disk,
 )
+from sqlalchemy import inspect
+from sqlalchemy.orm import selectinload
 from sqlmodel import SQLModel, col, delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -138,9 +138,7 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
         alert_columns = await conn.run_sync(
-            lambda sync_conn: {
-                column["name"] for column in inspect(sync_conn).get_columns("alert")
-            }
+            lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("alert")}
         )
         if "detection_confidence" not in alert_columns:
             await conn.exec_driver_sql("ALTER TABLE alert ADD COLUMN detection_confidence FLOAT")
@@ -241,14 +239,12 @@ async def get_encoding_from_model(
 
 # Making it available for the model to get the embeddings of known users
 async def get_templates(session: AsyncSession) -> list[dict[str, Any]]:
-    statement = select(FaceTemplate).join(User).where(User.is_temporary.is_(False))
+    statement = select(FaceTemplate).join(User).where(col(User.is_temporary).is_(False))
     results = (await session.exec(statement)).all()
     return [{"user_id": f.user_id, "embedding": f.embedding} for f in results]
 
 
-async def add_suggested_matches(
-    alerts: list[AlertRead], session: AsyncSession
-) -> None:
+async def add_suggested_matches(alerts: list[AlertRead], session: AsyncSession) -> None:
     templates = (
         await session.exec(
             select(FaceTemplate, User.name)
@@ -277,7 +273,7 @@ async def add_suggested_matches(
             vector = template.embedding
             if len(vector) != len(embedding):
                 continue
-            dot = math.fsum(left * right for left, right in zip(embedding, vector))
+            dot = math.fsum(left * right for left, right in zip(embedding, vector, strict=True))
             left_norm = math.sqrt(math.fsum(value * value for value in embedding))
             right_norm = math.sqrt(math.fsum(value * value for value in vector))
             if left_norm == 0 or right_norm == 0:
@@ -293,9 +289,7 @@ async def add_suggested_matches(
         if not best_by_user:
             continue
 
-        user_id, (similarity, name) = max(
-            best_by_user.items(), key=lambda item: item[1][0]
-        )
+        user_id, (similarity, name) = max(best_by_user.items(), key=lambda item: item[1][0])
         if 0.22 <= similarity < 0.33:
             alert.suggested_match = {
                 "user_id": user_id,
@@ -389,9 +383,7 @@ async def merge_users(
         )
     ).all()
     source_alerts = (
-        await session.exec(
-            select(Alert).where(Alert.recognised_user_id == payload.source_user_id)
-        )
+        await session.exec(select(Alert).where(Alert.recognised_user_id == payload.source_user_id))
     ).all()
 
     source_dir = Path(f"data/images/users/{payload.source_user_id}")
@@ -661,11 +653,7 @@ async def get_user(user_id: int, session: AsyncSession = Depends(get_session)):
             alert_reads.append(alert_read)
         await add_suggested_matches(alert_reads, session)
         user_read.suggested_match = next(
-            (
-                alert.suggested_match
-                for alert in alert_reads
-                if alert.suggested_match is not None
-            ),
+            (alert.suggested_match for alert in alert_reads if alert.suggested_match is not None),
             None,
         )
     return user_read

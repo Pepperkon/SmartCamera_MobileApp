@@ -15,7 +15,7 @@ export const saveAlertsToCache = async (alerts: AlertItem[]) => {
 
 export const updateAlertsAfterMerge = async (
   sourceUserId: number | string,
-  targetUser: { id: number | string; name: string },
+  targetUser: { id: number | string; name: string; is_trusted?: boolean },
 ) => {
   const alerts = await getAlertsFromCache();
   if (!alerts) return;
@@ -26,6 +26,7 @@ export const updateAlertsAfterMerge = async (
           ...alert,
           title: `Recognized: ${targetUser.name}`,
           recognised_user_id: Number(targetUser.id),
+          recognised_user_is_trusted: targetUser.is_trusted ?? false,
           recognised_user_is_temporary: false,
           user: { is_temporary: false },
         }

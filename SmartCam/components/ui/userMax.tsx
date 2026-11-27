@@ -40,6 +40,7 @@ function UserMax() {
   const [isSavingName, setSavingName] = useState(false);
   const [isMergeVisible, setMergeVisible] = useState(false);
 
+
   const handleDelete = (userName: string) => {
     Alert.alert(
       "Removing User",
@@ -181,6 +182,11 @@ function UserMax() {
       </View>
     );
   }
+  const latestDetectionConfidence =
+    user.alerts && user.alerts.length > 0
+      ? [...user.alerts].sort((a, b) => Number(b.id) - Number(a.id))[0]
+          ?.detection_confidence
+      : null;
   const primaryImage = user.images?.[0];
   const imageSource = primaryImage
     ? {
@@ -280,6 +286,7 @@ function UserMax() {
       <UserMergeModal
         visible={isMergeVisible}
         source={user}
+        detectionConfidence={latestDetectionConfidence}
         suggestedUserId={user.suggested_match?.user_id}
         onClose={() => setMergeVisible(false)}
         onMerged={() => {
