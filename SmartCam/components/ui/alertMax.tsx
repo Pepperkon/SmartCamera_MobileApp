@@ -92,24 +92,33 @@ function AlertMax() {
   };
 
   const handleMerged = (result: UserMergeResult) => {
-    setMergeVisible(false);
-    setAlert((current) =>
-      current
-        ? {
-            ...current,
-            title: `Recognized: ${result.target_user.name}`,
-            recognised_user_id: Number(result.target_user.id),
-            recognised_user_is_temporary: false,
-            user: { is_temporary: false },
-          }
-        : current,
-    );
-  };
+      setMergeVisible(false);
+      setAlert((current) =>
+        current
+          ? {
+              ...current,
+              title: `Recognized: ${result.target_user.name}`,
+              recognised_user_id: Number(result.target_user.id),
+              recognised_user_is_trusted: result.target_user.is_trusted,
+              recognised_user_is_temporary: false,
+              user: { is_temporary: false },
+            }
+          : current,
+      );
+    };
 
     const renderConfidence = () => {
       if (!alert) return null;
 
-      if (alert.confidence === null || alert.confidence === undefined || alert.confidence < 0) {
+      if (alert.confidence === -2) {
+        return null;
+      }
+
+      if (
+        alert.confidence === null ||
+        alert.confidence === undefined ||
+        alert.confidence < 0
+      ) {
         return (
           <Text
             style={[
@@ -137,7 +146,15 @@ function AlertMax() {
           {label}
         </Text>
       );
-    };
+    }
+  const [prevId, setPrevId] = useState(id);
+    if (id !== prevId) {
+      setPrevId(id);
+      setLoading(true);
+      setSuggestionDismissed(false);
+      setMergeSource(null);
+      setMergeVisible(false);
+    }
 
   useEffect(() => {
     let active = true;

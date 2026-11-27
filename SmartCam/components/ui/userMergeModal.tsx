@@ -82,17 +82,35 @@ function UserMergeModal({
   const [confirming, setConfirming] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!visible) return;
-    let active = true;
-    setLoading(true);
-    setSelectedUser(null);
-    setSearch("");
-    setConfirming(false);
+  const [prevVisible, setPrevVisible] = useState(visible);
+  const [prevDetectionConfidence, setPrevDetectionConfidence] =
+    useState(detectionConfidence);
+
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible) {
+      setLoading(true);
+      setSelectedUser(null);
+      setSearch("");
+      setConfirming(false);
+      setLoadError(null);
+      setIncludeTemplates(
+        detectionConfidence == null || detectionConfidence >= 0.82,
+      );
+    }
+  }
+
+  if (detectionConfidence !== prevDetectionConfidence) {
+    setPrevDetectionConfidence(detectionConfidence);
     setIncludeTemplates(
       detectionConfidence == null || detectionConfidence >= 0.82,
     );
-    setLoadError(null);
+  }
+
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+
     void fetchPermanentUsers()
       .then((result) => {
         if (active) setUsers(result.filter((user) => !user.is_temporary));
@@ -100,17 +118,20 @@ function UserMergeModal({
       .catch((error: unknown) => {
         if (active) {
           setLoadError(
-            error instanceof Error ? error.message : "Nie udało się pobrać profili.",
+            error instanceof Error
+              ? error.message
+              : "Nie udało się pobrać profili.",
           );
         }
       })
       .finally(() => {
         if (active) setLoading(false);
       });
+
     return () => {
       active = false;
     };
-  }, [visible, detectionConfidence]);
+  }, [visible]);
 
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
